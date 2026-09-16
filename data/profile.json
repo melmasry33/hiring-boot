@@ -1,0 +1,196 @@
+{
+  "name": "Mohamed Waleed Ezzat",
+  "headline": "AI/ML Engineer — Agentic AI & LLM Systems",
+  "location": "Banha, Egypt",
+  "phone": "+20 128 090 8922",
+  "email": "mwezzat16@gmail.com",
+  "linkedin": "https://www.linkedin.com/in/mohamedwaleed-data",
+  "github": "https://github.com/Mohamed-Elmasry16",
+  "datacamp": "https://datacamp.com/portfolio/mowaleed",
+  "summary": "AI/ML Engineer focused on Agentic AI: multi-agent orchestration, autonomous tool-calling systems, and production LLM-powered copilots deployed via FastAPI. Built a multi-agent pipeline for Recovera (planner, SQL generator, validator, executor, analytics interpreter) and an autonomous assistant that selects between tools based on user intent and streams its reasoning in real time. Experienced across the model lifecycle — training, evaluation, and deployment — and comfortable integrating LLM APIs (OpenRouter, Groq, Hugging Face) into scalable, production systems.",
+  "target_roles": [
+    "AI Engineer",
+    "Agentic AI Engineer",
+    "LLM Engineer",
+    "Machine Learning Engineer",
+    "Data Scientist",
+    "Data Engineer",
+    "BI Developer",
+    "Data Analyst"
+  ],
+  "experience": [
+    {
+      "role": "AI Developer — Freelance (Remote)",
+      "company": "Freelance",
+      "period": "2025 – Present",
+      "bullets": [
+        "Delivered end-to-end AI-powered products for multiple clients without an in-house engineering team, by owning the full delivery cycle — requirements gathering, architecture selection, LLM integration, and deployment — across Python/FastAPI backends and React/Next.js frontends.",
+        "Reduced client dependency on manual processes by independently architecting and shipping production-ready agent logic and LLM API integrations, iterating based on direct client feedback as the sole developer on each engagement."
+      ]
+    },
+    {
+      "role": "Power BI Development Intern",
+      "company": "Information Technology Institute (ITI), Menofia Branch, Egypt",
+      "period": "Jan 2026 – Jun 2026",
+      "bullets": [
+        "Improved data readiness for forecasting by building automated ETL pipelines (SQL, Power Query) that transformed raw source data into clean, model-ready datasets, then prototyped deep learning forecasting models in PyTorch on top of them."
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "name": "Vector — AI Personal Assistant (Agentic AI)",
+      "tech": "Python, FastAPI, React, LangChain, PostgreSQL, Docker",
+      "links": "vector-ai-snowy.vercel.app | github.com/Mohamed-Elmasry16/langchain-projects",
+      "bullets": [
+        "Increased task-completion flexibility by architecting an autonomous agent with custom tool-calling logic that dynamically selected among web search, document analysis, image generation, and utility tools based on user intent.",
+        "Improved user trust and transparency by streaming the agent's step-by-step reasoning in real time via Server-Sent Events (SSE), and sustained coherent long-context conversations through a custom hybrid conversational memory system."
+      ]
+    },
+    {
+      "name": "Recovera — Multi-Agent AI and BI Copilot",
+      "tech": "Python, FastAPI, PostgreSQL, LangChain, Docker",
+      "links": "recovera-copilot.vercel.app | github.com/Mohamed-Elmasry16/Recovera-Copilot-",
+      "bullets": [
+        "Enabled non-technical users to query business data safely by architecting a production multi-agent orchestration pipeline (planner, SQL generator, validator, executor, analytics interpreter) that converted natural-language questions into validated analytics output.",
+        "Improved retrieval relevance for retrieval-augmented generation (RAG) by integrating LLM APIs through the Hugging Face Transformers ecosystem for intelligent routing and semantic retrieval, backed by a PostgreSQL + pgvector embeddings schema.",
+        "Prevented unsafe or unauthorized query execution at scale by building a code-layer SQL validator (sqlglot + policy engine); deployed end-to-end (Hugging Face Spaces, Vercel) with LangSmith tracing for full multi-agent observability."
+      ]
+    },
+    {
+      "name": "GPT-2 Style Transformer from Scratch",
+      "tech": "Python, PyTorch, NLP",
+      "links": "github.com/Mohamed-Elmasry16/LLM-from-scratch",
+      "bullets": [
+        "Built first-principles understanding of the architecture underlying modern LLM agents by engineering a GPT-2-style transformer from scratch in PyTorch — implementing custom training loops, tokenization, embeddings, multi-head self-attention, and transformer blocks."
+      ]
+    },
+    {
+      "name": "Advanced RAG Pipeline",
+      "tech": "Python, LangChain, ChromaDB, Llama 3.3",
+      "links": "github.com/Mohamed-Elmasry16",
+      "bullets": [
+        "Reduced hallucination risk and improved answer traceability by designing an end-to-end RAG pipeline covering chunking, embeddings, semantic retrieval, and context-aware generation with source citations."
+      ]
+    },
+    {
+      "name": "Telecom Churn AI Assistant",
+      "tech": "Python, FastAPI, Streamlit, XGBoost, Hugging Face",
+      "links": "github.com/Mohamed-Elmasry16/Telecom-churn-project",
+      "bullets": [
+        "Achieved ~80% recall on churn prediction (up from an imbalanced baseline) by training and tuning an XGBoost model with SMOTE and GridSearchCV, then made results accessible via a natural-language chat interface (Qwen2.5-1.5B) deployed with FastAPI/Streamlit."
+      ]
+    }
+  ],
+  "skills_categories": {
+    "Agentic AI": [
+      "Multi-Agent Orchestration",
+      "Autonomous Tool Calling",
+      "Agent Architecture Design",
+      "Automation Pipelines"
+    ],
+    "Generative AI & LLMs": [
+      "Large Language Models (LLMs)",
+      "Retrieval-Augmented Generation (RAG)",
+      "Prompt Engineering",
+      "Tokenization & Embeddings",
+      "NLP"
+    ],
+    "ML Lifecycle": [
+      "Model Training",
+      "Model Evaluation",
+      "Model Deployment",
+      "Feature Engineering",
+      "Data Preprocessing"
+    ],
+    "Frameworks & Libraries": [
+      "LangChain",
+      "PyTorch",
+      "TensorFlow",
+      "Hugging Face Transformers",
+      "Scikit-learn",
+      "XGBoost"
+    ],
+    "LLM API Integration & Observability": [
+      "OpenRouter",
+      "Groq",
+      "Hugging Face Inference",
+      "LangSmith (Observability)",
+      "Claude Skills and Connectors"
+    ],
+    "Programming & Backend": [
+      "Python",
+      "SQL",
+      "TypeScript",
+      "FastAPI",
+      "REST APIs",
+      "Server-Sent Events (SSE)"
+    ],
+    "Databases & Storage": [
+      "PostgreSQL",
+      "Supabase",
+      "ChromaDB",
+      "pgvector (Vector Databases)"
+    ],
+    "Deployment & DevOps": [
+      "Docker",
+      "Vercel",
+      "Hugging Face Spaces",
+      "Git",
+      "GitHub"
+    ],
+    "BI & Data Analytics": [
+      "Power BI",
+      "Power Query",
+      "ETL Pipelines",
+      "Pandas",
+      "NumPy"
+    ]
+  },
+  "skills": [
+    "Python",
+    "SQL",
+    "TypeScript",
+    "Agentic AI",
+    "Multi-Agent Orchestration",
+    "LLMs",
+    "RAG",
+    "LangChain",
+    "PyTorch",
+    "FastAPI",
+    "PostgreSQL",
+    "pgvector",
+    "ChromaDB",
+    "Docker",
+    "Power BI",
+    "Power Query",
+    "Scikit-learn",
+    "XGBoost",
+    "TensorFlow",
+    "Hugging Face",
+    "LangSmith",
+    "Pandas",
+    "NumPy"
+  ],
+  "education": [
+    "Bachelor of Science, Computer Science — Very Good — El Shorouk Academy, Cairo, Egypt (Sep 2019 – Aug 2023). Graduation Project: ECHO Virtual Assistant (Rated Excellent)"
+  ],
+  "certifications": [
+    "DataCamp: Associate Data Analyst Certification",
+    "DataCamp: Associate Data Engineer in SQL (28 hrs)",
+    "DataCamp: SQL Associate & Python Data Associate",
+    "IBM (Coursera): Databases and SQL for Data Science with Python (Honors)",
+    "DeepLearning.AI: Advanced Learning Algorithms",
+    "Coursera: Mathematics for Machine Learning and Data Science Specialization",
+    "Coursera: Supervised Machine Learning (Regression and Classification)",
+    "ITI Mahara-Tech: Generative AI & Practical Machine Learning for Data Science"
+  ],
+  "simulations": [
+    "Deloitte Australia — Virtual Data Analyst Job Simulation (via Forage): Python, statistical analysis, stakeholder mapping, data preprocessing."
+  ],
+  "languages": [
+    "Arabic (Native)",
+    "English (Proficient)"
+  ],
+  "military_service": "Completed mandatory military duty"
+}
