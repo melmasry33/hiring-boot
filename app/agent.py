@@ -202,8 +202,17 @@ TOOLS: List[Dict[str, Any]] = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "role": {"type": "string"},
-                    "company": {"type": "string"},
+                    "role": {
+                        "type": "string",
+                        "description": (
+                            "The exact job title you are applying for (e.g. 'Senior Data "
+                            "Engineer'). This is NOT the company name."
+                        ),
+                    },
+                    "company": {
+                        "type": "string",
+                        "description": "The hiring company's name only.",
+                    },
                     "job_url": {"type": "string"},
                     "recruiter_email": {"type": "string", "description": "Leave empty if genuinely unknown."},
                     "fit_summary": {"type": "string", "description": "1-2 honest sentences on fit."},
@@ -216,7 +225,15 @@ TOOLS: List[Dict[str, Any]] = [
                             "the match look better."
                         ),
                     },
-                    "headline": {"type": "string", "description": "Max 60 characters."},
+                    "headline": {
+                        "type": "string",
+                        "description": (
+                            "Max 60 characters. A short professional headline for the top "
+                            "of the CV, describing the candidate's role/specialty (e.g. "
+                            "'Data Engineer - Python, SQL, AI Systems'). Must NOT be the "
+                            "company name or the job posting's company."
+                        ),
+                    },
                     "summary": {"type": "string", "description": "3-4 sentences, built only from real profile facts."},
                     "selected_experience": {
                         "type": "array",
@@ -227,8 +244,14 @@ TOOLS: List[Dict[str, Any]] = [
                         "items": {
                             "type": "object",
                             "properties": {
-                                "role": {"type": "string"},
-                                "company": {"type": "string"},
+                                "role": {
+                                    "type": "string",
+                                    "description": "The candidate's job title at this past employer.",
+                                },
+                                "company": {
+                                    "type": "string",
+                                    "description": "The name of that past employer.",
+                                },
                                 "period": {"type": "string"},
                                 "bullets": {"type": "array", "items": {"type": "string"}},
                             },
