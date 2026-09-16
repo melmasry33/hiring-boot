@@ -1,0 +1,15 @@
+# Secrets — never commit these. Railway holds them as Variables.
+.env
+
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Local runtime state
+browser_profile/
+data/generated_cvs/
+data/applications.json
+data/conversations.json
+data/notes.json

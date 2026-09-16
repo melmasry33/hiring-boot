@@ -1,0 +1,14 @@
+.git
+.gitignore
+.env
+.venv
+venv/
+__pycache__/
+*.pyc
+browser_profile/
+data/generated_cvs/
+data/applications.json
+data/conversations.json
+data/notes.json
+*.md
+!README.md
