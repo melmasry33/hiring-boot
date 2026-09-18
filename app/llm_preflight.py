@@ -70,45 +70,9 @@ def normalize_base_url(raw: str) -> Tuple[str, List[str]]:
 
 
 def list_models(base_url: str, api_key: str, timeout: float = 15.0) -> Tuple[Optional[List[str]], str]:
-
-
-def probe_chat_model(base_url: str, model: str, api_key: str, timeout: float = 8.0) -> Tuple[bool, str]:
-    """Verify the model can actually answer a Chat Completions request.
-
-    The /models catalogue can contain models that are not entitled to the
-    current API key. A tiny real completion is the authoritative readiness
-    check for this OpenAI-compatible endpoint.
-    """
-    url = f"{base_url}/chat/completions"
-    payload = {
-        "model": model,
-        "messages": [{"role": "user", "content": "Reply with OK."}],
-        "max_tokens": 1,
-        "temperature": 0,
-        "stream": False,
-    }
-    try:
-        resp = httpx.post(
-            url,
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=timeout,
-            follow_redirects=True,
-        )
-    except httpx.HTTPError as e:
-        return False, f"{type(e).__name__}: {e}"
-    if resp.status_code < 300:
-        return True, "chat/completions probe succeeded"
-    if resp.status_code in (401, 403):
-        return False, f"authentication rejected ({resp.status_code})"
-    if resp.status_code == 404:
-        return False, "model is not available to this key/endpoint (HTTP 404)"
-    if resp.status_code == 429:
-        return False, "provider rate-limited the probe (HTTP 429)"
-    return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
     """
     GET {base_url}/models. Returns (model_ids, detail).
-    model_ids is None when the catalogue could not be read; `detail` then
+    model_ids is None when the catalogue could not be read; detail then
     explains why in a form you can act on.
     """
     url = f"{base_url}/models"
@@ -144,6 +108,37 @@ def probe_chat_model(base_url: str, model: str, api_key: str, timeout: float = 8
     if not ids:
         return None, f"{url} answered but listed no models."
     return ids, f"{len(ids)} models available at {base_url}"
+
+
+def probe_chat_model(base_url: str, model: str, api_key: str, timeout: float = 8.0) -> Tuple[bool, str]:
+    """Verify the model can actually answer a Chat Completions request."""
+    url = f"{base_url}/chat/completions"
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": "Reply with OK."}],
+        "max_tokens": 1,
+        "temperature": 0,
+        "stream": False,
+    }
+    try:
+        resp = httpx.post(
+            url,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=timeout,
+            follow_redirects=True,
+        )
+    except httpx.HTTPError as e:
+        return False, f"{type(e).__name__}: {e}"
+    if resp.status_code < 300:
+        return True, "chat/completions probe succeeded"
+    if resp.status_code in (401, 403):
+        return False, f"authentication rejected ({resp.status_code})"
+    if resp.status_code == 404:
+        return False, "model is not available to this key/endpoint (HTTP 404)"
+    if resp.status_code == 429:
+        return False, "provider rate-limited the probe (HTTP 429)"
+    return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
 
 
 def resolve_model(
