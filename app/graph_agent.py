@@ -537,12 +537,14 @@ def _build_client(model: str) -> ChatOpenAI:
     }
     # NVIDIA's current reasoning models default to maximum thinking.
     # Interactive Telegram turns need low-latency tool decisions instead.
-    if model.lower() in {
+    model_id = model.lower()
+    if model_id in {
         "z-ai/glm-5.3",
-        "z-ai/glm-5-3",
-        "z-ai/glm-5-3-flash",
+        "z-ai/glm-5.3-flash",
         "openai/gpt-oss-20b",
     }:
+        # NVIDIA's current reasoning endpoints default to maximum thinking.
+        # Interactive Telegram turns need low-latency tool decisions instead.
         client_kwargs["reasoning_effort"] = "low"
     return ChatOpenAI(**client_kwargs).bind_tools(TOOLS, parallel_tool_calls=False)
 
@@ -640,8 +642,13 @@ def _explain_provider_error(e: Exception) -> str:
             "Check LLM_API_KEY belongs to this provider and is still active."
         )
     if "429" in text:
-        return "The AI provider is rate-limiting this key. Wait a moment and try again."
-    return f"The AI provider rejected the request: {e}"
+        return "The AI provider is rate-limiting this key. Please retry shortly."
+    if "timeout" in text.lower() or "timed out" in text.lower() or "APITimeoutError" in type(e).__name__:
+        return (
+            f"The AI request timed out after {LLM_TIMEOUT}s while using '{active_model()}'. "
+            "The provider did not finish the response in time."
+        )
+    return f"The AI provider returned an unexpected error: {e}"
 
 
 def _trim_removals(messages: List[BaseMessage]) -> List[RemoveMessage]:
