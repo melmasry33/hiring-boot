@@ -26,6 +26,13 @@ import httpx
 # Path segments that mean "this URL already points at an API version root".
 _VERSION_SEGMENTS = {"v1", "v1beta", "openai", "api"}
 
+# NVIDIA hosted endpoint lifecycle: this model reached end-of-life on
+# 2026-08-26 and returns HTTP 410 even though older model catalogues may still
+# list it. Keep it out of automatic model selection.
+RETIRED_MODELS = {
+    "meta/llama-3.3-70b-instruct",
+}
+
 
 def normalize_base_url(raw: str) -> Tuple[str, List[str]]:
     """
@@ -124,6 +131,9 @@ def resolve_model(
 
     available = {i.lower(): i for i in ids}
     for candidate in chain:
+        if candidate.lower() in RETIRED_MODELS:
+            notes.append(f"WARN: '{candidate}' is retired at the hosted endpoint — skipping.")
+            continue
         if candidate.lower() in available:
             if notes:
                 notes.append(f"Falling back to '{candidate}'.")
@@ -155,6 +165,9 @@ def preflight(base_url: str, model: str, api_key: str, timeout: float = 15.0) ->
 
     if ids is None:
         return [f"FATAL: LLM endpoint unusable — {detail}"]
+
+    if model in RETIRED_MODELS:
+        return [f"WARN: LLM_MODEL '{model}' is retired at the hosted endpoint; use an active model such as meta/muse-glimmer-30b."]
 
     if model in ids:
         return []
