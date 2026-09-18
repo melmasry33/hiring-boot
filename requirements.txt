@@ -1,0 +1,29 @@
+# Runtime dependencies. Pinned to compatible ranges — python-telegram-bot is
+# strict about its httpx version, so leaving these open is how deploys break.
+python-telegram-bot==21.9
+openai>=1.55,<2.0
+httpx>=0.27,<0.28
+fpdf2>=2.7.9
+python-dotenv>=1.0.1
+
+# graph_agent.py — LangGraph rewrite. Core deps, always required:
+langgraph>=1.0,<2.0
+langchain-core>=1.6,<2.0
+langchain-openai>=1.6,<2.0
+
+# Checkpointer for conversation/job-state persistence. SQLite is the default
+# (no setup needed, lives on the same DATA_DIR volume). aiosqlite is required
+# because the graph runs async (ainvoke) and the sync SqliteSaver raises
+# NotImplementedError under async.
+langgraph-checkpoint-sqlite>=2.0
+aiosqlite>=0.20
+
+# OPTIONAL — only if you set DATABASE_URL to use Postgres instead of SQLite
+# (recommended once you outgrow a single Railway volume, e.g. multiple
+# instances or you want checkpoints to survive a volume wipe):
+# langgraph-checkpoint-postgres>=2.0
+# psycopg[binary]>=3.1
+
+# Playwright is intentionally NOT here. It is a local-only extra:
+#   pip install playwright && playwright install chromium
+# See app/linkedin_browser.py and ENABLE_PLAYWRIGHT in .env.example.
