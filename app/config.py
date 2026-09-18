@@ -105,6 +105,10 @@ LLM_FALLBACK_MODELS = [
 ]
 LLM_MODEL_CHAIN = [LLM_MODEL] + [m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]
 LLM_TIMEOUT = min(_env_int("LLM_TIMEOUT", 45), 45)
+LLM_MAX_RETRIES = max(0, min(_env_int("LLM_MAX_RETRIES", 0), 5))
+# Kept as configuration/documentation for custom retry layers. The OpenAI SDK
+# controls its own backoff schedule and does not expose a base-delay argument.
+LLM_RETRY_BASE_DELAY = max(0.0, float(_env("LLM_RETRY_BASE_DELAY", "0.5") or 0.5))
 LLM_TEMPERATURE = float(_env("LLM_TEMPERATURE", "0.3") or 0.3)
 LLM_MAX_TOKENS = _env_int("LLM_MAX_TOKENS", 2048)
 
