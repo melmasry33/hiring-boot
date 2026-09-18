@@ -532,7 +532,7 @@ def _build_client(model: str) -> ChatOpenAI:
         timeout=LLM_TIMEOUT,
         temperature=LLM_TEMPERATURE,
         max_tokens=LLM_MAX_TOKENS,
-    ).bind_tools(TOOLS)
+    ).bind_tools(TOOLS, parallel_tool_calls=False)
 
 
 def active_model() -> str:
