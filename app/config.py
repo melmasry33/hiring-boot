@@ -95,13 +95,13 @@ LLM_API_KEY = (
 from llm_preflight import normalize_base_url as _normalize_base_url  # noqa: E402
 
 LLM_BASE_URL, LLM_BASE_URL_NOTES = _normalize_base_url(_RAW_LLM_BASE_URL)
-LLM_MODEL = _env("LLM_MODEL") or _env("NVIDIA_MODEL") or "meta/muse-glimmer-30b"
+LLM_MODEL = _env("LLM_MODEL") or _env("NVIDIA_MODEL") or "poolside/laguna-xs-2.1"
 
 # Ordered degradation chain. Tried in order when LLM_MODEL is not served by the
 # endpoint (404) — a newly-released NIM that your key isn't entitled to yet is
 # the common case, and it should not take the whole bot down.
 LLM_FALLBACK_MODELS = [
-    m.strip() for m in (_env("LLM_FALLBACK_MODELS") or "z-ai/glm-5-3-flash,meta/muse-glimmer-30b,openai/gpt-oss-20b").split(",") if m.strip()
+    m.strip() for m in (_env("LLM_FALLBACK_MODELS") or "google/gemma-4-31b-it,meta/muse-glimmer-30b,z-ai/glm-5-3-flash,openai/gpt-oss-20b").split(",") if m.strip()
 ]
 LLM_MODEL_CHAIN = [LLM_MODEL] + [m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]
 LLM_TIMEOUT = min(_env_int("LLM_TIMEOUT", 30), 30)
