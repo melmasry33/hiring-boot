@@ -540,7 +540,7 @@ def _build_client(model: str) -> ChatOpenAI:
     model_id = model.lower()
     if model_id in {
         "z-ai/glm-5.3",
-        "z-ai/glm-5.3-flash",
+        "z-ai/glm-5-3-flash",
         "meta/muse-glimmer-30b",
         "google/gemma-4-31b-it",
         "z-ai/glm-5.3-flash",
