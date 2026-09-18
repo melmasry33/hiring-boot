@@ -70,6 +70,42 @@ def normalize_base_url(raw: str) -> Tuple[str, List[str]]:
 
 
 def list_models(base_url: str, api_key: str, timeout: float = 15.0) -> Tuple[Optional[List[str]], str]:
+
+
+def probe_chat_model(base_url: str, model: str, api_key: str, timeout: float = 8.0) -> Tuple[bool, str]:
+    """Verify the model can actually answer a Chat Completions request.
+
+    The /models catalogue can contain models that are not entitled to the
+    current API key. A tiny real completion is the authoritative readiness
+    check for this OpenAI-compatible endpoint.
+    """
+    url = f"{base_url}/chat/completions"
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": "Reply with OK."}],
+        "max_tokens": 1,
+        "temperature": 0,
+        "stream": False,
+    }
+    try:
+        resp = httpx.post(
+            url,
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=timeout,
+            follow_redirects=True,
+        )
+    except httpx.HTTPError as e:
+        return False, f"{type(e).__name__}: {e}"
+    if resp.status_code < 300:
+        return True, "chat/completions probe succeeded"
+    if resp.status_code in (401, 403):
+        return False, f"authentication rejected ({resp.status_code})"
+    if resp.status_code == 404:
+        return False, "model is not available to this key/endpoint (HTTP 404)"
+    if resp.status_code == 429:
+        return False, "provider rate-limited the probe (HTTP 429)"
+    return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
     """
     GET {base_url}/models. Returns (model_ids, detail).
     model_ids is None when the catalogue could not be read; `detail` then
@@ -111,22 +147,15 @@ def list_models(base_url: str, api_key: str, timeout: float = 15.0) -> Tuple[Opt
 
 
 def resolve_model(
-    base_url: str, chain: List[str], api_key: str, timeout: float = 15.0
+    base_url: str, chain: List[str], api_key: str, timeout: float = 8.0
 ) -> Tuple[Optional[str], List[str]]:
-    """
-    Walk LLM_MODEL_CHAIN against the endpoint's real catalogue and return the
-    first id it actually serves, plus notes explaining every skip.
-
-    This is the difference between "the bot is down" and "the bot quietly ran
-    on llama-3.3-70b today because the new NIM isn't entitled to this key yet".
-    """
+    """Choose the first model that passes a real chat/completions probe."""
     notes: List[str] = []
     if not chain:
         return None, ["FATAL: no model configured."]
 
-    ids, detail = list_models(base_url, api_key, timeout)
+    ids, detail = list_models(base_url, api_key, min(timeout, 8.0))
     if ids is None:
-        # Catalogue unreadable — don't guess, don't silently downgrade.
         return None, [f"FATAL: LLM endpoint unusable — {detail}"]
 
     available = {i.lower(): i for i in ids}
@@ -134,16 +163,21 @@ def resolve_model(
         if candidate.lower() in RETIRED_MODELS:
             notes.append(f"WARN: '{candidate}' is retired at the hosted endpoint — skipping.")
             continue
-        if candidate.lower() in available:
+
+        ok, probe_detail = probe_chat_model(base_url, candidate, api_key, timeout)
+        if ok:
             if notes:
                 notes.append(f"Falling back to '{candidate}'.")
-            return available[candidate.lower()], notes
-        notes.append(f"WARN: '{candidate}' is not served at {base_url} — skipping.")
+            return candidate, notes
+
+        if "authentication rejected" in probe_detail:
+            return None, [f"FATAL: provider rejected the API key while probing '{candidate}'."]
+        notes.append(f"WARN: '{candidate}' failed real chat probe — {probe_detail}.")
 
     suggestions = difflib.get_close_matches(chain[0].lower(), list(available), n=3, cutoff=0.4)
     notes.append(
-        f"FATAL: none of {chain} is served at {base_url} ({detail})."
-        + (" Closest available: " + ", ".join(available[s] for s in suggestions) if suggestions else "")
+        f"FATAL: none of {chain} passed a real chat/completions probe at {base_url}."
+        + (" Closest catalogue ids: " + ", ".join(available[s] for s in suggestions) if suggestions else "")
     )
     return None, notes
 
