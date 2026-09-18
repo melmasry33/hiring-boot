@@ -76,11 +76,18 @@ except OSError:
 # LLM_* is the canonical name. NVIDIA_* is kept as a fallback so an existing
 # .env from the previous version keeps working with no edits.
 
-LLM_API_KEY = _env("LLM_API_KEY") or _env("NVIDIA_API_KEY")
 _RAW_LLM_BASE_URL = (
     _env("LLM_BASE_URL")
     or _env("NVIDIA_BASE_URL")
     or "https://integrate.api.nvidia.com/v1"
+)
+
+# For NVIDIA's API Catalog, prefer its dedicated key variable when both are
+# present. This prevents an older generic LLM_API_KEY from shadowing a valid
+# NVIDIA_API_KEY in Railway.
+LLM_API_KEY = (
+    _env("NVIDIA_API_KEY") if "nvidia" in _RAW_LLM_BASE_URL.lower() and _env("NVIDIA_API_KEY")
+    else _env("LLM_API_KEY") or _env("NVIDIA_API_KEY")
 )
 # A base URL with no /v1 (or with /chat/completions pasted on the end) produces
 # a 404 whose response body is EMPTY -- which the openai SDK renders as a bare
