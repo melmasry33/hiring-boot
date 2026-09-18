@@ -17,7 +17,7 @@ import sys
 import time
 from typing import Any, Dict, Optional
 
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
 from telegram.error import Conflict, TelegramError
 from telegram.ext import (
@@ -452,6 +452,12 @@ async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def _post_init(application) -> None:
     from telegram import BotCommand
 
+    # Polling and a webhook can't coexist — if one was ever set (e.g. from
+    # earlier testing) it would silently block getUpdates. This runs inside
+    # the loop run_polling manages, unlike a bare asyncio.run() call in
+    # main(), which would close that loop out from under it.
+    await application.bot.delete_webhook(drop_pending_updates=True)
+
     await application.bot.set_my_commands(
         [
             BotCommand("start", "What this bot does"),
@@ -514,11 +520,10 @@ def main() -> None:
 
     # On a rolling deploy, the previous container's polling connection can
     # still be releasing when this one starts, which makes Telegram reject
-    # our first getUpdates call with a Conflict. Clear any stale webhook
-    # (belt-and-braces — polling and a webhook can't coexist either) and
-    # retry with backoff instead of letting that single race crash the
-    # process and force a Railway restart.
-    asyncio.run(Bot(TELEGRAM_BOT_TOKEN).delete_webhook(drop_pending_updates=True))
+    # our first getUpdates call with a Conflict. Retry with backoff instead
+    # of letting that single race crash the process and force a Railway
+    # restart. (Any stale webhook is cleared in _post_init, inside the
+    # loop run_polling itself manages.)
 
     max_retries = 5
     base_delay = 3  # seconds; grows linearly each attempt
