@@ -55,6 +55,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Dict, List, Optional, TypedDict
@@ -127,6 +128,19 @@ class AgentState(TypedDict):
 
 def _job(state: AgentState) -> JobContext:
     return state.get("job") or {}
+
+
+# Serialize job state updates per user to prevent concurrent writes
+_user_locks: Dict[int, threading.RLock] = {}
+_locks_lock = threading.RLock()
+
+
+def _get_user_lock(user_id: int) -> threading.RLock:
+    """Get or create a lock for this user, thread-safe."""
+    with _locks_lock:
+        if user_id not in _user_locks:
+            _user_locks[user_id] = threading.RLock()
+        return _user_locks[user_id]
 
 
 def _blocked(tool_call_id: str, message: str) -> Command:
@@ -214,23 +228,27 @@ async def read_job(
     This is the required first step before score_match or build_application."""
     result = await job_source.get_linkedin_job(url)
     text = result.get("description") or result.get("text") or ""
-    new_job: JobContext = {
-        "job_url": url,
-        "job_text": text,
-        "score": {},
-        "application_built": False,
-    }
-    return Command(
-        update={
-            "job": new_job,
-            "messages": [
-                ToolMessage(
-                    content=json.dumps(result, ensure_ascii=False, default=str)[:12000],
-                    tool_call_id=tool_call_id,
-                )
-            ],
+    user_lock = _get_user_lock(state["user_id"])
+    with user_lock:
+        job = _job(state)
+        new_job: JobContext = {
+            **job,
+            "job_url": url,
+            "job_text": text,
+            "score": {},
+            "application_built": False,
         }
-    )
+        return Command(
+            update={
+                "job": new_job,
+                "messages": [
+                    ToolMessage(
+                        content=json.dumps(result, ensure_ascii=False, default=str)[:12000],
+                        tool_call_id=tool_call_id,
+                    )
+                ],
+            }
+        )
 
 
 @tool
@@ -250,22 +268,24 @@ def score_match(
     against the stored profile. Returns a 0-100 score, matched skills,
     missing skills and a seniority warning. You must call read_job first —
     this scores whatever job read_job last loaded, not free text."""
-    job = _job(state)
-    job_text = job.get("job_text")
-    if not job_text:
-        return _blocked(
-            tool_call_id,
-            "No job has been read yet. Call read_job on the posting URL first — "
-            "you cannot score a job you have not read.",
+    user_lock = _get_user_lock(state["user_id"])
+    with user_lock:
+        job = _job(state)
+        job_text = job.get("job_text")
+        if not job_text:
+            return _blocked(
+                tool_call_id,
+                "No job has been read yet. Call read_job on the posting URL first — "
+                "you cannot score a job you have not read.",
+            )
+        result = matching.score_job(job_text)
+        new_job: JobContext = {**job, "score": result}
+        return Command(
+            update={
+                "job": new_job,
+                "messages": [ToolMessage(content=json.dumps(result, default=str), tool_call_id=tool_call_id)],
+            }
         )
-    result = matching.score_job(job_text)
-    new_job: JobContext = {**job, "score": result}
-    return Command(
-        update={
-            "job": new_job,
-            "messages": [ToolMessage(content=json.dumps(result, default=str), tool_call_id=tool_call_id)],
-        }
-    )
 
 
 @tool
@@ -311,68 +331,70 @@ async def build_application(
     email_body: application email referencing the SAME projects as the CV.
     recruiter_email: leave empty if genuinely unknown.
     """
-    job = _job(state)
-    if not job.get("job_text"):
-        return _blocked(tool_call_id, "No job has been read yet. Call read_job first.")
-    if not job.get("score"):
-        return _blocked(tool_call_id, "This job hasn't been scored yet. Call score_match first.")
+    user_lock = _get_user_lock(state["user_id"])
+    with user_lock:
+        job = _job(state)
+        if not job.get("job_text"):
+            return _blocked(tool_call_id, "No job has been read yet. Call read_job first.")
+        if not job.get("score"):
+            return _blocked(tool_call_id, "This job hasn't been scored yet. Call score_match first.")
 
-    user_id = state["user_id"]
-    profile = store.load_profile()
-    cv_data = {
-        "name": profile.get("name", ""),
-        "headline": headline or profile.get("headline", ""),
-        "summary": summary or profile.get("summary", ""),
-        "location": profile.get("location", ""),
-        "phone": profile.get("phone", ""),
-        "email": profile.get("email", ""),
-        "linkedin": profile.get("linkedin", ""),
-        "github": profile.get("github", ""),
-        "experience": selected_experience or profile.get("experience", []),
-        "projects": selected_projects or profile.get("projects", []),
-        "education": profile.get("education", []),
-        "certifications": selected_certifications or profile.get("certifications", []),
-        "skills_categories": skills_categories or profile.get("skills_categories", {}),
-    }
-    safe = "".join(c if c.isalnum() else "_" for c in f"{profile.get('name','CV')}_{company}")[:60]
-    pdf_path = cv_generator.generate_pdf_cv(cv_data, filename=f"{safe}.pdf")
-
-    draft = {
-        "role": role,
-        "company": company,
-        "job_url": job_url or job.get("job_url", ""),
-        "recruiter_email": (recruiter_email or "").strip(),
-        "email_subject": (email_subject or "")[:80],
-        "email_body": email_body,
-        "pdf_path": pdf_path,
-        "fit_summary": fit_summary,
-        "gap_notes": gap_notes or [],
-        "created_at": time.time(),
-    }
-    store.save_draft(user_id, draft)
-
-    new_job: JobContext = {**job, "application_built": True}
-    result = {
-        "ok": True,
-        "cv_generated": True,
-        "cv_file": pdf_path,
-        "message": (
-            "The tailored CV PDF has been sent to the user in this chat and the email "
-            "draft is staged. Summarise the fit and the gaps in your reply, show the "
-            "email subject and body, and tell them to approve sending or give you a "
-            "recruiter address. Do not re-paste the CV contents."
-        ),
-        "draft_subject": draft["email_subject"],
-        "draft_recruiter_email": draft["recruiter_email"] or None,
-        # Consumed by run_turn to attach the PDF to this turn's reply.
-        "_attachment": {"path": pdf_path, "caption": f"Tailored CV — {role} at {company}"},
-    }
-    return Command(
-        update={
-            "job": new_job,
-            "messages": [ToolMessage(content=json.dumps(result, ensure_ascii=False, default=str)[:12000], tool_call_id=tool_call_id)],
+        user_id = state["user_id"]
+        profile = store.load_profile()
+        cv_data = {
+            "name": profile.get("name", ""),
+            "headline": headline or profile.get("headline", ""),
+            "summary": summary or profile.get("summary", ""),
+            "location": profile.get("location", ""),
+            "phone": profile.get("phone", ""),
+            "email": profile.get("email", ""),
+            "linkedin": profile.get("linkedin", ""),
+            "github": profile.get("github", ""),
+            "experience": selected_experience or profile.get("experience", []),
+            "projects": selected_projects or profile.get("projects", []),
+            "education": profile.get("education", []),
+            "certifications": selected_certifications or profile.get("certifications", []),
+            "skills_categories": skills_categories or profile.get("skills_categories", {}),
         }
-    )
+        safe = "".join(c if c.isalnum() else "_" for c in f"{profile.get('name','CV')}_{company}")[:60]
+        pdf_path = cv_generator.generate_pdf_cv(cv_data, filename=f"{safe}.pdf")
+
+        draft = {
+            "role": role,
+            "company": company,
+            "job_url": job_url or job.get("job_url", ""),
+            "recruiter_email": (recruiter_email or "").strip(),
+            "email_subject": (email_subject or "")[:80],
+            "email_body": email_body,
+            "pdf_path": pdf_path,
+            "fit_summary": fit_summary,
+            "gap_notes": gap_notes or [],
+            "created_at": time.time(),
+        }
+        store.save_draft(user_id, draft)
+
+        new_job: JobContext = {**job, "application_built": True}
+        result = {
+            "ok": True,
+            "cv_generated": True,
+            "cv_file": pdf_path,
+            "message": (
+                "The tailored CV PDF has been sent to the user in this chat and the email "
+                "draft is staged. Summarise the fit and the gaps in your reply, show the "
+                "email subject and body, and tell them to approve sending or give you a "
+                "recruiter address. Do not re-paste the CV contents."
+            ),
+            "draft_subject": draft["email_subject"],
+            "draft_recruiter_email": draft["recruiter_email"] or None,
+            # Consumed by run_turn to attach the PDF to this turn's reply.
+            "_attachment": {"path": pdf_path, "caption": f"Tailored CV — {role} at {company}"},
+        }
+        return Command(
+            update={
+                "job": new_job,
+                "messages": [ToolMessage(content=json.dumps(result, ensure_ascii=False, default=str)[:12000], tool_call_id=tool_call_id)],
+            }
+        )
 
 
 @tool
