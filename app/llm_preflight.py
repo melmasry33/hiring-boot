@@ -167,6 +167,12 @@ def resolve_model(
 
         if "authentication rejected" in probe_detail:
             return None, [f"FATAL: provider rejected the API key while probing '{candidate}'."]
+        if "HTTP 503" in probe_detail or "HTTP 429" in probe_detail:
+            # Capacity/rate-limit errors are transient. Do not hammer every
+            # fallback model during boot; select this candidate provisionally
+            # and let the runtime retry with backoff.
+            notes.append(f"WARN: '{candidate}' is temporarily unavailable — {probe_detail}. Selecting provisionally.")
+            return candidate, notes
         notes.append(f"WARN: '{candidate}' failed real chat probe — {probe_detail}.")
 
     suggestions = difflib.get_close_matches(chain[0].lower(), list(available), n=3, cutoff=0.4)
