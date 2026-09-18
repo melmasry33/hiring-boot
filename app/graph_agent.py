@@ -80,6 +80,7 @@ import cv_generator
 import jobs as job_source
 import matching
 import store
+from llm_preflight import resolve_model
 from config import (
     DATA_DIR,
     LLM_API_KEY,
@@ -549,6 +550,27 @@ def get_client() -> Optional[ChatOpenAI]:
         _active_model = LLM_MODEL
         _llm = _build_client(_active_model)
     return _llm
+
+
+def eager_resolve() -> List[str]:
+    """
+    Called once at boot. Walks LLM_MODEL_CHAIN against the real catalogue and
+    pre-builds the client on whichever entry works, so the FIRST real user
+    message doesn't pay for a 404 round-trip and startup logs don't cry FATAL
+    over a primary model that the configured fallback would have covered anyway.
+    """
+    global _llm, _active_model
+    if not LLM_API_KEY:
+        return ["FATAL: LLM_API_KEY is not set — the agent cannot think."]
+
+    chosen, notes = resolve_model(LLM_BASE_URL, LLM_MODEL_CHAIN, LLM_API_KEY)
+    if chosen is None:
+        return notes  # last entry is FATAL — nothing in the chain works
+    _active_model = chosen
+    _llm = _build_client(chosen)
+    # Non-fatal notes (skipped/fell-back entries) still matter — surface them
+    # as WARN so /diag and the startup log show what actually happened.
+    return [n if n.startswith(("FATAL", "WARN")) else f"WARN: {n}" for n in notes]
 
 
 def _demote_model() -> bool:
