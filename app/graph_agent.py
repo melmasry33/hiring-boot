@@ -649,12 +649,17 @@ def _explain_provider_error(e: Exception) -> str:
             f"The AI provider rejected the API key (auth error) for {LLM_BASE_URL}. "
             "Check LLM_API_KEY belongs to this provider and is still active."
         )
+    if "503" in text or "ResourceExhausted" in text or "Service Unavailable" in text:
+        return (
+            f"The NVIDIA AI endpoint is temporarily overloaded while using '{active_model()}'. "
+            "The agent retried automatically, but the provider was still at capacity."
+        )
     if "429" in text:
-        return "The AI provider is rate-limiting this key. Please retry shortly."
+        return "The AI provider is rate-limiting this key. The agent retried automatically."
     if "timeout" in text.lower() or "timed out" in text.lower() or "APITimeoutError" in type(e).__name__:
         return (
             f"The AI request timed out after {LLM_TIMEOUT}s while using '{active_model()}'. "
-            "The provider did not finish the response in time."
+            "The provider did not finish the response in time." 
         )
     return f"The AI provider returned an unexpected error: {e}"
 
@@ -684,17 +689,37 @@ def _agent_node(state: AgentState) -> dict:
     live_messages = [m for m in state["messages"] if m.id not in dropped_ids]
     payload = [SystemMessage(content=_system_prompt())] + live_messages
 
+    attempts_on_model = 0
+    max_transient_retries = 2
     while True:
         try:
             response = llm.invoke(payload)
             break
         except Exception as e:
-            # Model-not-found and provider timeouts can be transient or
-            # model-specific. Advance once to the next configured model instead
-            # of making the Telegram user stare at a long traceback.
-            retryable = _is_model_not_found(e) or "timeout" in str(e).lower() or "timed out" in str(e).lower()
+            error_text = str(e).lower()
+            transient = (
+                "503" in error_text
+                or "service unavailable" in error_text
+                or "resourceexhausted" in error_text
+                or "429" in error_text
+                or "timeout" in error_text
+                or "timed out" in error_text
+            )
+            if transient and attempts_on_model < max_transient_retries:
+                delay = 2 ** attempts_on_model
+                attempts_on_model += 1
+                logger.warning(
+                    f"Transient LLM error on '{active_model()}'; "
+                    f"retrying in {delay}s ({attempts_on_model}/{max_transient_retries})."
+                )
+                time.sleep(delay)
+                continue
+
+            # After a short backoff window, try the next configured model.
+            retryable = _is_model_not_found(e) or transient
             if not retryable or not _demote_model():
                 raise
+            attempts_on_model = 0
             llm = get_client()
     # Removals + the new response land in the same state update: old turns
     # are pruned from the checkpointer, the new one is appended, in one step.
