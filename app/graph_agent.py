@@ -535,10 +535,14 @@ def _build_client(model: str) -> ChatOpenAI:
         "max_tokens": LLM_MAX_TOKENS,
         "max_retries": LLM_MAX_RETRIES,
     }
-    # GLM-5.3 defaults to maximum reasoning on NVIDIA's hosted endpoint.
-    # Use low reasoning for interactive Telegram turns so tool calls don't
-    # spend the whole request budget on internal reasoning.
-    if model.lower() == "z-ai/glm-5.3":
+    # NVIDIA's current reasoning models default to maximum thinking.
+    # Interactive Telegram turns need low-latency tool decisions instead.
+    if model.lower() in {
+        "z-ai/glm-5.3",
+        "z-ai/glm-5-3",
+        "z-ai/glm-5-3-flash",
+        "openai/gpt-oss-20b",
+    }:
         client_kwargs["reasoning_effort"] = "low"
     return ChatOpenAI(**client_kwargs).bind_tools(TOOLS, parallel_tool_calls=False)
 
