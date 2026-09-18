@@ -538,22 +538,21 @@ def _build_client(model: str) -> ChatOpenAI:
     # NVIDIA's current reasoning models default to maximum thinking.
     # Interactive Telegram turns need low-latency tool decisions instead.
     model_id = model.lower()
-    if model_id in {
-        "z-ai/glm-5.3",
+    if model_id == "nvidia/nemotron-3.5-lightning-30b-a3b":
+        # NVIDIA exposes a small explicit reasoning budget for this model.
+        # That keeps an interactive Telegram turn responsive without disabling
+        # the reasoning behavior entirely.
+        client_kwargs["extra_body"] = {
+            "chat_template_kwargs": {"enable_thinking": True},
+            "reasoning_budget": 4096,
+        }
+    elif model_id in {
         "z-ai/glm-5-3-flash",
-        "meta/muse-glimmer-30b",
-        "google/gemma-4-31b-it",
         "z-ai/glm-5.3-flash",
+        "z-ai/glm-5.3",
         "openai/gpt-oss-20b",
     }:
-        # Keep agentic turns on the smallest supported reasoning budget.
         client_kwargs["reasoning_effort"] = "low"
-    if model_id == "z-ai/glm-5.3-flash":
-        # NVIDIA's GLM-5.3-Flash model card explicitly recommends exposing the
-        # final answer cleanly in chat scenarios.
-        client_kwargs["extra_body"] = {
-            "chat_template_kwargs": {"clear_thinking": True}
-        }
     return ChatOpenAI(**client_kwargs).bind_tools(TOOLS, parallel_tool_calls=False)
 
 
@@ -715,9 +714,10 @@ def _agent_node(state: AgentState) -> dict:
                 time.sleep(delay)
                 continue
 
-            # After a short backoff window, try the next configured model.
-            retryable = _is_model_not_found(e) or transient
-            if not retryable or not _demote_model():
+            # Only move to another model for a genuine model/endpoint
+            # mismatch. Capacity and provider-internal failures should not make
+            # the same user turn jump between unrelated models.
+            if not _is_model_not_found(e) or not _demote_model():
                 raise
             attempts_on_model = 0
             llm = get_client()
