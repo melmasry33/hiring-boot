@@ -29,7 +29,7 @@ from telegram.ext import (
     filters,
 )
 
-import agent
+import graph_agent as agent
 import email_sender
 import store
 from config import (
