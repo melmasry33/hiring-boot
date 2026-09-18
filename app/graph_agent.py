@@ -541,11 +541,19 @@ def _build_client(model: str) -> ChatOpenAI:
     if model_id in {
         "z-ai/glm-5.3",
         "z-ai/glm-5.3-flash",
+        "meta/muse-glimmer-30b",
+        "google/gemma-4-31b-it",
+        "z-ai/glm-5.3-flash",
         "openai/gpt-oss-20b",
     }:
-        # NVIDIA's current reasoning endpoints default to maximum thinking.
-        # Interactive Telegram turns need low-latency tool decisions instead.
+        # Keep agentic turns on the smallest supported reasoning budget.
         client_kwargs["reasoning_effort"] = "low"
+    if model_id == "z-ai/glm-5.3-flash":
+        # NVIDIA's GLM-5.3-Flash model card explicitly recommends exposing the
+        # final answer cleanly in chat scenarios.
+        client_kwargs["extra_body"] = {
+            "chat_template_kwargs": {"clear_thinking": True}
+        }
     return ChatOpenAI(**client_kwargs).bind_tools(TOOLS, parallel_tool_calls=False)
 
 
@@ -681,9 +689,11 @@ def _agent_node(state: AgentState) -> dict:
             response = llm.invoke(payload)
             break
         except Exception as e:
-            # Only a model-not-found is worth retrying down the chain. An auth
-            # error or a rate limit will fail identically on every entry.
-            if not _is_model_not_found(e) or not _demote_model():
+            # Model-not-found and provider timeouts can be transient or
+            # model-specific. Advance once to the next configured model instead
+            # of making the Telegram user stare at a long traceback.
+            retryable = _is_model_not_found(e) or "timeout" in str(e).lower() or "timed out" in str(e).lower()
+            if not retryable or not _demote_model():
                 raise
             llm = get_client()
     # Removals + the new response land in the same state update: old turns
