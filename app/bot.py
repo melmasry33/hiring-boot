@@ -17,9 +17,9 @@ import sys
 import time
 from typing import Any, Dict, Optional
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.constants import ChatAction
-from telegram.error import TelegramError
+from telegram.error import Conflict, TelegramError
 from telegram.ext import (
     ApplicationBuilder,
     CallbackQueryHandler,
@@ -511,8 +511,35 @@ def main() -> None:
     application.add_error_handler(on_error)
 
     logger.info(f"Career agent starting — model {LLM_MODEL}")
-    # drop_pending_updates avoids replaying a backlog of messages after a redeploy.
-    application.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+
+    # On a rolling deploy, the previous container's polling connection can
+    # still be releasing when this one starts, which makes Telegram reject
+    # our first getUpdates call with a Conflict. Clear any stale webhook
+    # (belt-and-braces — polling and a webhook can't coexist either) and
+    # retry with backoff instead of letting that single race crash the
+    # process and force a Railway restart.
+    asyncio.run(Bot(TELEGRAM_BOT_TOKEN).delete_webhook(drop_pending_updates=True))
+
+    max_retries = 5
+    base_delay = 3  # seconds; grows linearly each attempt
+    for attempt in range(1, max_retries + 1):
+        try:
+            # drop_pending_updates avoids replaying a backlog of messages after a redeploy.
+            application.run_polling(drop_pending_updates=True, allowed_updates=Update.ALL_TYPES)
+            break  # run_polling only returns on a clean shutdown
+        except Conflict:
+            if attempt == max_retries:
+                logger.error(
+                    f"Still getting Conflict after {max_retries} attempts — "
+                    "another instance appears to be genuinely running elsewhere. Giving up."
+                )
+                raise
+            delay = base_delay * attempt
+            logger.warning(
+                f"Telegram Conflict on attempt {attempt}/{max_retries} — a previous "
+                f"instance is likely still shutting down. Retrying in {delay}s."
+            )
+            time.sleep(delay)
 
 
 if __name__ == "__main__":
