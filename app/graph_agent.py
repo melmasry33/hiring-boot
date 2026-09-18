@@ -525,14 +525,21 @@ _active_model: Optional[str] = None
 
 
 def _build_client(model: str) -> ChatOpenAI:
-    return ChatOpenAI(
-        model=model,
-        api_key=LLM_API_KEY,
-        base_url=LLM_BASE_URL,
-        timeout=LLM_TIMEOUT,
-        temperature=LLM_TEMPERATURE,
-        max_tokens=LLM_MAX_TOKENS,
-    ).bind_tools(TOOLS, parallel_tool_calls=False)
+    client_kwargs = {
+        "model": model,
+        "api_key": LLM_API_KEY,
+        "base_url": LLM_BASE_URL,
+        "timeout": LLM_TIMEOUT,
+        "temperature": LLM_TEMPERATURE,
+        "max_tokens": LLM_MAX_TOKENS,
+        "max_retries": 0,
+    }
+    # GLM-5.3 defaults to maximum reasoning on NVIDIA's hosted endpoint.
+    # Use low reasoning for interactive Telegram turns so tool calls don't
+    # spend the whole request budget on internal reasoning.
+    if model.lower() == "z-ai/glm-5.3":
+        client_kwargs["reasoning_effort"] = "low"
+    return ChatOpenAI(**client_kwargs).bind_tools(TOOLS, parallel_tool_calls=False)
 
 
 def active_model() -> str:
