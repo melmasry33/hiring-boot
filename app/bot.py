@@ -473,10 +473,12 @@ def main() -> None:
     store.bootstrap()
 
     problems = startup_report()
-    # One cheap GET /models. Catching a bad LLM_BASE_URL / LLM_MODEL here beats
-    # discovering it as a 404 traceback on the first real user message.
+    # Walk the full LLM_MODEL_CHAIN once at boot and pre-build the client on
+    # whichever entry actually works. Beats discovering a 404 as a traceback
+    # on the first real user message, and means the startup log reflects what
+    # will really run instead of just the primary model in isolation.
     if LLM_API_KEY:
-        problems.extend(llm_preflight(LLM_BASE_URL, LLM_MODEL, LLM_API_KEY))
+        problems.extend(agent.eager_resolve())
 
     for problem in problems:
         (logger.error if problem.startswith("FATAL") else logger.warning)(problem)
