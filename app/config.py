@@ -77,12 +77,26 @@ except OSError:
 # .env from the previous version keeps working with no edits.
 
 LLM_API_KEY = _env("LLM_API_KEY") or _env("NVIDIA_API_KEY")
-LLM_BASE_URL = (
+_RAW_LLM_BASE_URL = (
     _env("LLM_BASE_URL")
     or _env("NVIDIA_BASE_URL")
     or "https://integrate.api.nvidia.com/v1"
-).rstrip("/")
+)
+# A base URL with no /v1 (or with /chat/completions pasted on the end) produces
+# a 404 whose response body is EMPTY -- which the openai SDK renders as a bare
+# "Error code: 404" with nothing after it. Normalise before anyone can trip on it.
+from llm_preflight import normalize_base_url as _normalize_base_url  # noqa: E402
+
+LLM_BASE_URL, LLM_BASE_URL_NOTES = _normalize_base_url(_RAW_LLM_BASE_URL)
 LLM_MODEL = _env("LLM_MODEL") or _env("NVIDIA_MODEL") or "meta/llama-3.3-70b-instruct"
+
+# Ordered degradation chain. Tried in order when LLM_MODEL is not served by the
+# endpoint (404) — a newly-released NIM that your key isn't entitled to yet is
+# the common case, and it should not take the whole bot down.
+LLM_FALLBACK_MODELS = [
+    m.strip() for m in _env("LLM_FALLBACK_MODELS").split(",") if m.strip()
+]
+LLM_MODEL_CHAIN = [LLM_MODEL] + [m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]
 LLM_TIMEOUT = _env_int("LLM_TIMEOUT", 90)
 LLM_TEMPERATURE = float(_env("LLM_TEMPERATURE", "0.3") or 0.3)
 LLM_MAX_TOKENS = _env_int("LLM_MAX_TOKENS", 2048)
@@ -164,6 +178,8 @@ def startup_report() -> list:
         problems.append("FATAL: TELEGRAM_BOT_TOKEN is not set — the bot cannot start.")
     if not LLM_API_KEY:
         problems.append("FATAL: LLM_API_KEY (or NVIDIA_API_KEY) is not set — the agent cannot think.")
+    for note in LLM_BASE_URL_NOTES:
+        problems.append(f"WARN: {note}")
     if not PROFILE_PATH.exists():
         problems.append(f"WARN: no profile at {PROFILE_PATH} — run /profile in the bot to set one up.")
     if not (SMTP_USER and SMTP_PASS):

@@ -86,6 +86,7 @@ from config import (
     LLM_BASE_URL,
     LLM_MAX_TOKENS,
     LLM_MODEL,
+    LLM_MODEL_CHAIN,
     LLM_TEMPERATURE,
     LLM_TIMEOUT,
     MAX_HISTORY_MESSAGES,
@@ -517,24 +518,96 @@ def _system_prompt() -> str:
 # ---------------------------------------------------------------------------
 
 _llm: Optional[ChatOpenAI] = None
+# Which entry of LLM_MODEL_CHAIN we are currently on. Survives for the life of
+# the process, so one 404 doesn't cost every subsequent turn a retry.
+_active_model: Optional[str] = None
+
+
+def _build_client(model: str) -> ChatOpenAI:
+    return ChatOpenAI(
+        model=model,
+        api_key=LLM_API_KEY,
+        base_url=LLM_BASE_URL,
+        timeout=LLM_TIMEOUT,
+        temperature=LLM_TEMPERATURE,
+        max_tokens=LLM_MAX_TOKENS,
+    ).bind_tools(TOOLS)
+
+
+def active_model() -> str:
+    """What the bot is ACTUALLY talking to, which may not be LLM_MODEL."""
+    return _active_model or LLM_MODEL
 
 
 def get_client() -> Optional[ChatOpenAI]:
     """Same name/contract as agent.py's get_client, so bot.py's /diag check
     (`agent.get_client()`) keeps working unchanged."""
-    global _llm
+    global _llm, _active_model
     if not LLM_API_KEY:
         return None
     if _llm is None:
-        _llm = ChatOpenAI(
-            model=LLM_MODEL,
-            api_key=LLM_API_KEY,
-            base_url=LLM_BASE_URL,
-            timeout=LLM_TIMEOUT,
-            temperature=LLM_TEMPERATURE,
-            max_tokens=LLM_MAX_TOKENS,
-        ).bind_tools(TOOLS)
+        _active_model = LLM_MODEL
+        _llm = _build_client(_active_model)
     return _llm
+
+
+def _demote_model() -> bool:
+    """
+    The active model 404'd. Advance to the next entry in LLM_MODEL_CHAIN and
+    rebuild the client. Returns False when the chain is exhausted.
+    """
+    global _llm, _active_model
+    current = active_model()
+    try:
+        nxt = LLM_MODEL_CHAIN[LLM_MODEL_CHAIN.index(current) + 1]
+    except (ValueError, IndexError):
+        return False
+    logger.error(
+        f"Model '{current}' returned 404 at {LLM_BASE_URL} — falling back to '{nxt}'. "
+        f"Fix LLM_MODEL (or your provider entitlement) to stop running degraded."
+    )
+    _active_model = nxt
+    _llm = _build_client(nxt)
+    return True
+
+
+def _is_model_not_found(e: Exception) -> bool:
+    """A 404 that names the model, not a 404 from a wrong URL path."""
+    name = type(e).__name__
+    if "ModelNotFound" in name or "NotFoundError" in name:
+        return True
+    return "404" in str(e) and "model" in str(e).lower()
+
+
+def _explain_provider_error(e: Exception) -> str:
+    """
+    Provider errors arrive as a bare status code wrapped in 60 lines of
+    LangChain/LangGraph frames. Translate the ones that are config mistakes
+    into something you can act on without opening the logs.
+    """
+    text = str(e)
+    if "404" in text or "NotFound" in type(e).__name__:
+        # An empty body after "Error code: 404" means the HTTP PATH is wrong.
+        # A JSON body naming the model means the MODEL is wrong. Both are config.
+        path_level = text.strip().rstrip(".").endswith("404")
+        cause = (
+            f"the endpoint {LLM_BASE_URL} has no /chat/completions route — LLM_BASE_URL is wrong"
+            if path_level
+            else f"the provider does not serve the model '{LLM_MODEL}' — LLM_MODEL is wrong for this endpoint"
+        )
+        return (
+            f"The AI provider returned 404: {cause}.\n\n"
+            f"Current settings:\n• LLM_BASE_URL = {LLM_BASE_URL}\n• LLM_MODEL = {LLM_MODEL}\n\n"
+            "Run /diag — it now checks the endpoint's model catalogue and names the closest valid id."
+        )
+    if "401" in text or "403" in text:
+        return (
+            f"The AI provider rejected the API key (auth error) for {LLM_BASE_URL}. "
+            "Check LLM_API_KEY belongs to this provider and is still active."
+        )
+    if "429" in text:
+        return "The AI provider is rate-limiting this key. Wait a moment and try again."
+    return f"The AI provider rejected the request: {e}"
 
 
 def _trim_removals(messages: List[BaseMessage]) -> List[RemoveMessage]:
@@ -560,7 +633,18 @@ def _agent_node(state: AgentState) -> dict:
     removals = _trim_removals(state["messages"])
     dropped_ids = {r.id for r in removals}
     live_messages = [m for m in state["messages"] if m.id not in dropped_ids]
-    response = llm.invoke([SystemMessage(content=_system_prompt())] + live_messages)
+    payload = [SystemMessage(content=_system_prompt())] + live_messages
+
+    while True:
+        try:
+            response = llm.invoke(payload)
+            break
+        except Exception as e:
+            # Only a model-not-found is worth retrying down the chain. An auth
+            # error or a rate limit will fail identically on every entry.
+            if not _is_model_not_found(e) or not _demote_model():
+                raise
+            llm = get_client()
     # Removals + the new response land in the same state update: old turns
     # are pruned from the checkpointer, the new one is appended, in one step.
     return {"messages": [*removals, response]}
@@ -702,7 +786,7 @@ async def run_turn(
         )
     except Exception as e:
         logger.error(f"Graph run failed for user {user_id}: {e}", exc_info=True)
-        return AgentTurn(status="ERROR", error=f"The AI provider rejected the request: {e}")
+        return AgentTurn(status="ERROR", error=_explain_provider_error(e))
 
     await _collect_attachments_and_trace(graph, config, turn)
 

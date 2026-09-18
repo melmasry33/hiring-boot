@@ -33,6 +33,8 @@ import graph_agent as agent
 import email_sender
 import store
 from config import (
+    LLM_API_KEY,
+    LLM_BASE_URL,
     LLM_MODEL,
     SMTP_USER,
     TELEGRAM_ALLOWED_USER_IDS,
@@ -41,6 +43,7 @@ from config import (
     startup_report,
 )
 from health import start_health_server
+from llm_preflight import preflight as llm_preflight
 
 TELEGRAM_MAX = 3900  # under the 4096 hard limit, leaving room for entities
 
@@ -275,9 +278,16 @@ async def cmd_diag(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return await deny(update)
     profile = store.load_profile()
     problems = startup_report()
+    await update.message.chat.send_action(ChatAction.TYPING)
+    endpoint_problems = await asyncio.to_thread(
+        llm_preflight, LLM_BASE_URL, LLM_MODEL, LLM_API_KEY, 15.0
+    )
+    problems.extend(endpoint_problems)
     lines = [
         "🔧 Diagnostics",
-        f"Model: {LLM_MODEL}",
+        f"Model: {agent.active_model()}" + (f"  (configured: {LLM_MODEL} — NOT AVAILABLE)" if agent.active_model() != LLM_MODEL else ""),
+        f"Endpoint: {LLM_BASE_URL}",
+        f"Endpoint reachable: {'NO — see issues below' if endpoint_problems else 'yes, and it serves this model'}",
         f"LLM key: {'set' if agent.get_client() else 'MISSING'}",
         f"SMTP: {'set (' + SMTP_USER + ')' if SMTP_USER else 'MISSING'}",
         f"Profile: {'loaded — ' + (profile.get('name') or '?') if profile else 'MISSING'}",
@@ -462,7 +472,13 @@ async def _post_init(application) -> None:
 def main() -> None:
     store.bootstrap()
 
-    for problem in startup_report():
+    problems = startup_report()
+    # One cheap GET /models. Catching a bad LLM_BASE_URL / LLM_MODEL here beats
+    # discovering it as a 404 traceback on the first real user message.
+    if LLM_API_KEY:
+        problems.extend(llm_preflight(LLM_BASE_URL, LLM_MODEL, LLM_API_KEY))
+
+    for problem in problems:
         (logger.error if problem.startswith("FATAL") else logger.warning)(problem)
 
     if not TELEGRAM_BOT_TOKEN:
