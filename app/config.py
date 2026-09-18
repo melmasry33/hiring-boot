@@ -97,7 +97,7 @@ LLM_FALLBACK_MODELS = [
     m.strip() for m in (_env("LLM_FALLBACK_MODELS") or "meta/muse-glimmer-30b").split(",") if m.strip()
 ]
 LLM_MODEL_CHAIN = [LLM_MODEL] + [m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]
-LLM_TIMEOUT = _env_int("LLM_TIMEOUT", 90)
+LLM_TIMEOUT = min(_env_int("LLM_TIMEOUT", 45), 45)
 LLM_TEMPERATURE = float(_env("LLM_TEMPERATURE", "0.3") or 0.3)
 LLM_MAX_TOKENS = _env_int("LLM_MAX_TOKENS", 2048)
 
