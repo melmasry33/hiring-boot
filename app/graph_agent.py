@@ -85,6 +85,7 @@ from config import (
     DATA_DIR,
     LLM_API_KEY,
     LLM_BASE_URL,
+    LLM_MAX_RETRIES,
     LLM_MAX_TOKENS,
     LLM_MODEL,
     LLM_MODEL_CHAIN,
@@ -532,7 +533,7 @@ def _build_client(model: str) -> ChatOpenAI:
         "timeout": LLM_TIMEOUT,
         "temperature": LLM_TEMPERATURE,
         "max_tokens": LLM_MAX_TOKENS,
-        "max_retries": 0,
+        "max_retries": LLM_MAX_RETRIES,
     }
     # GLM-5.3 defaults to maximum reasoning on NVIDIA's hosted endpoint.
     # Use low reasoning for interactive Telegram turns so tool calls don't
