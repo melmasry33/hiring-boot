@@ -12,7 +12,7 @@ WORKDIR /srv
 
 # CA certificates are needed for TLS to Telegram, the LLM provider and SMTP.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates tzdata gosu \
+ && apt-get install -y --no-install-recommends ca-certificates tzdata gosu fonts-dejavu \
  && rm -rf /var/lib/apt/lists/*
 
 # Requirements first so dependency layers cache across code changes.
