@@ -478,7 +478,7 @@ async def build_application(
         paragraphs = [p for p in paragraphs if p]
         return "\\n\\n".join(paragraphs).strip()
 
-def _canonical_certifications(items: Optional[List[str]]) -> List[str]:
+    def _canonical_certifications(items: Optional[List[str]]) -> List[str]:
         requested = [_norm(x) for x in (items or [])]
         ordered: List[str] = []
         used = set()
