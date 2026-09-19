@@ -607,7 +607,7 @@ def _demote_model() -> bool:
     except (ValueError, IndexError):
         return False
     logger.error(
-        f"Model '{current}' returned 404 at {LLM_BASE_URL} — falling back to '{nxt}'. "
+        f"Model '{current}' failed at {LLM_BASE_URL} — falling back to '{nxt}'. "
         f"Fix LLM_MODEL (or your provider entitlement) to stop running degraded."
     )
     _active_model = nxt
@@ -723,10 +723,13 @@ def _agent_node(state: AgentState) -> dict:
                 time.sleep(delay)
                 continue
 
-            # Only move to another model for a genuine model/endpoint
-            # mismatch. Capacity and provider-internal failures should not make
-            # the same user turn jump between unrelated models.
-            if not _is_model_not_found(e) or not _demote_model():
+            # Fail over to the next configured model after transient
+            # provider failures too. This lets OpenRouter move from the
+            # DeepSeek free endpoint to openrouter/free when the primary is
+            # unavailable, rate-limited, or times out.
+            if not _is_model_not_found(e) and not transient:
+                raise
+            if not _demote_model():
                 raise
             attempts_on_model = 0
             llm = get_client()
