@@ -12,7 +12,7 @@ WORKDIR /srv
 
 # CA certificates are needed for TLS to Telegram, the LLM provider and SMTP.
 RUN apt-get update \
- && apt-get install -y --no-install-recommends ca-certificates tzdata \
+ && apt-get install -y --no-install-recommends ca-certificates tzdata gosu \
  && rm -rf /var/lib/apt/lists/*
 
 # Requirements first so dependency layers cache across code changes.
@@ -27,7 +27,10 @@ COPY tests/ ./tests/
 RUN useradd --create-home --uid 10001 agent \
  && mkdir -p /data /tmp/generated_cvs \
  && chown -R agent:agent /srv /data /tmp/generated_cvs
-USER agent
+
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
 
 ENV PYTHONPATH=/srv/app \
     DATA_DIR=/data \
