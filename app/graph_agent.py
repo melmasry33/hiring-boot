@@ -522,7 +522,9 @@ async def build_application(
         "military_service": variant.get("additional_information") or profile.get("military_service", ""),
         "skills_categories": ordered_skill_categories or variant_skill_categories,
     }
-    safe = "".join(c if c.isalnum() else "_" for c in f"{profile.get('name','CV')}_{company}")[:60]
+    # The generated CV filename should identify the candidate and target role,
+    # not the company, so the file remains reusable and professional.
+    safe = "".join(c if c.isalnum() else "_" for c in f"{profile.get('name','CV')}_{role}")[:60]
     pdf_path = cv_generator.generate_pdf_cv(cv_data, filename=f"{safe}.pdf")
 
     cleaned_email_body = _clean_email_body(email_body)
