@@ -13,3 +13,7 @@ data/generated_cvs/
 data/applications.json
 data/conversations.json
 data/notes.json
+
+# Google OAuth secrets
+gmail_token.json
+client_secret_*.json
