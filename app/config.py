@@ -73,8 +73,8 @@ except OSError:
 # ---------------------------------------------------------------------------
 # LLM provider (OpenAI-compatible: NVIDIA NIM, Groq, OpenRouter, OpenAI, ...)
 # ---------------------------------------------------------------------------
-# LLM_* is the canonical name. NVIDIA_* is kept as a fallback so an existing
-# .env from the previous version keeps working with no edits.
+# LLM_* is the canonical name. Provider-specific variables are kept as
+# fallbacks so an existing .env can migrate without code changes.
 
 _RAW_LLM_BASE_URL = (
     _env("LLM_BASE_URL")
@@ -82,13 +82,15 @@ _RAW_LLM_BASE_URL = (
     or "https://integrate.api.nvidia.com/v1"
 )
 
-# For NVIDIA's API Catalog, prefer its dedicated key variable when both are
-# present. This prevents an older generic LLM_API_KEY from shadowing a valid
-# NVIDIA_API_KEY in Railway.
-LLM_API_KEY = (
-    _env("NVIDIA_API_KEY") if "nvidia" in _RAW_LLM_BASE_URL.lower() and _env("NVIDIA_API_KEY")
-    else _env("LLM_API_KEY") or _env("NVIDIA_API_KEY")
-)
+# Prefer the provider-specific key when the configured OpenAI-compatible
+# endpoint is Groq or NVIDIA. This prevents an older generic LLM_API_KEY from
+# shadowing the provider key in Railway.
+if "groq" in _RAW_LLM_BASE_URL.lower():
+    LLM_API_KEY = _env("GROQ_API_KEY") or _env("LLM_API_KEY") or _env("NVIDIA_API_KEY")
+elif "nvidia" in _RAW_LLM_BASE_URL.lower():
+    LLM_API_KEY = _env("NVIDIA_API_KEY") or _env("LLM_API_KEY")
+else:
+    LLM_API_KEY = _env("LLM_API_KEY") or _env("GROQ_API_KEY") or _env("NVIDIA_API_KEY")
 # A base URL with no /v1 (or with /chat/completions pasted on the end) produces
 # a 404 whose response body is EMPTY -- which the openai SDK renders as a bare
 # "Error code: 404" with nothing after it. Normalise before anyone can trip on it.
@@ -188,7 +190,7 @@ def startup_report() -> list:
     if not TELEGRAM_BOT_TOKEN:
         problems.append("FATAL: TELEGRAM_BOT_TOKEN is not set — the bot cannot start.")
     if not LLM_API_KEY:
-        problems.append("FATAL: LLM_API_KEY (or NVIDIA_API_KEY) is not set — the agent cannot think.")
+        problems.append("FATAL: no LLM API key is set (LLM_API_KEY, GROQ_API_KEY, or NVIDIA_API_KEY) — the agent cannot think.")
     for note in LLM_BASE_URL_NOTES:
         problems.append(f"WARN: {note}")
     if not PROFILE_PATH.exists():
