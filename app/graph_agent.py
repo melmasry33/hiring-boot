@@ -553,7 +553,7 @@ def _build_client(model: str) -> ChatOpenAI:
         "openai/gpt-oss-20b",
         "openai/gpt-oss-120b",
     }:
-        client_kwargs["reasoning_effort"] = "medium"
+        client_kwargs["reasoning_effort"] = "low"
     return ChatOpenAI(**client_kwargs).bind_tools(TOOLS, parallel_tool_calls=False)
 
 
