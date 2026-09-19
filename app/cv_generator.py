@@ -246,6 +246,13 @@ def generate_pdf_cv(cv_data: Dict[str, Any], filename: str = None) -> str:
         for item in certifications:
             bullet(item, size=8.25, line_h=3.75)
 
+    # ----------------------- TRAINING / SIMULATIONS -----------------------
+    training = [clean_text(x) for x in (cv_data.get("training") or []) if clean_text(x)]
+    if training:
+        section_header("Training & Simulations")
+        for item in training:
+            bullet(item, size=8.25, line_h=3.75)
+
     # ----------------------------- LANGUAGES -------------------------------
     languages = [clean_text(x) for x in (cv_data.get("languages") or []) if clean_text(x)]
     if languages:
