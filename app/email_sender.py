@@ -1,36 +1,21 @@
 """
-SMTP delivery.
+Resend HTTP delivery.
 
-Two changes from the original that matter in production:
-
-1. `smtplib` is blocking. Called directly from a coroutine it freezes the whole
-   bot for the duration of the handshake — under Gmail that is routinely 3-8
-   seconds during which the bot answers nobody. Everything is now wrapped in
-   `asyncio.to_thread`.
-2. The approval gate is kept exactly as strict as before: nothing leaves this
-   process without approved=True, which only the Telegram button sets.
+Uses Resend's HTTPS API instead of SMTP so delivery does not depend on outbound
+mail ports. The public interface remains unchanged for the rest of the agent.
 """
 
 import asyncio
+import base64
 import os
-import smtplib
-from email import encoders
-from email.mime.base import MIMEBase
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
-from email.utils import formataddr, formatdate
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from config import (
-    SENDER_EMAIL,
-    SENDER_NAME,
-    SMTP_HOST,
-    SMTP_PASS,
-    SMTP_PORT,
-    SMTP_USER,
-    logger,
-)
+import httpx
+
+from config import RESEND_API_KEY, SENDER_EMAIL, SENDER_NAME, logger
+
+RESEND_URL = "https://api.resend.com/emails"
 
 
 def _send_sync(
@@ -40,47 +25,63 @@ def _send_sync(
     cv_file_path: Optional[str],
     reply_to: Optional[str],
 ) -> Dict[str, Any]:
-    msg = MIMEMultipart()
-    from_addr = SENDER_EMAIL or SMTP_USER
-    msg["From"] = formataddr((SENDER_NAME, from_addr)) if SENDER_NAME else from_addr
-    msg["To"] = recipient_email
-    msg["Subject"] = subject
-    msg["Date"] = formatdate(localtime=True)
-    if reply_to:
-        msg["Reply-To"] = reply_to
+    sender = SENDER_EMAIL.strip()
+    if not sender:
+        raise RuntimeError("SENDER_EMAIL is not configured.")
 
-    msg.attach(MIMEText(body, "plain", "utf-8"))
+    from_value = f"{SENDER_NAME} <{sender}>" if SENDER_NAME else sender
+
+    payload: Dict[str, Any] = {
+        "from": from_value,
+        "to": [recipient_email],
+        "subject": subject,
+        "text": body,
+    }
+
+    if reply_to:
+        payload["reply_to"] = [reply_to]
 
     if cv_file_path and os.path.exists(cv_file_path):
-        file_name = Path(cv_file_path).name
-        with open(cv_file_path, "rb") as f:
-            part = MIMEBase("application", "pdf")
-            part.set_payload(f.read())
-        encoders.encode_base64(part)
-        part.add_header("Content-Disposition", f'attachment; filename="{file_name}"')
-        msg.attach(part)
-        logger.info(f"Attached CV: {file_name}")
+        file_path = Path(cv_file_path)
+        payload["attachments"] = [
+            {
+                "filename": file_path.name,
+                "content": base64.b64encode(file_path.read_bytes()).decode("ascii"),
+            }
+        ]
+        logger.info("Attached CV: %s", file_path.name)
 
-    logger.info(f"Connecting to SMTP {SMTP_HOST}:{SMTP_PORT} ...")
-    if SMTP_PORT == 465:
-        with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as server:
-            server.login(SMTP_USER, SMTP_PASS)
-            server.send_message(msg)
-    else:
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
-            server.ehlo()
-            server.starttls()
-            server.ehlo()
-            server.login(SMTP_USER, SMTP_PASS)
-            server.send_message(msg)
+    logger.info("Sending email to %s through Resend HTTPS API ...", recipient_email)
 
-    return {
-        "success": True,
-        "status": "SENT",
-        "message": f"Application email sent to {recipient_email}.",
-        "recipient": recipient_email,
-        "subject": subject,
-    }
+    with httpx.Client(timeout=30.0) as client:
+        response = client.post(
+            RESEND_URL,
+            headers={
+                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+        )
+
+    if response.is_success:
+        data = response.json()
+        email_id = data.get("id")
+        return {
+            "success": True,
+            "status": "SENT",
+            "message": f"Application email sent to {recipient_email}.",
+            "recipient": recipient_email,
+            "subject": subject,
+            "id": email_id,
+        }
+
+    try:
+        error_payload = response.json()
+        detail = error_payload.get("message") or error_payload.get("name") or str(error_payload)
+    except ValueError:
+        detail = response.text.strip() or response.reason_phrase
+
+    raise RuntimeError(f"Resend API returned HTTP {response.status_code}: {detail}")
 
 
 async def send_application_email(
@@ -105,29 +106,31 @@ async def send_application_email(
             "message": f"Invalid recipient address: '{recipient_email}'",
         }
 
-    if not (SMTP_USER and SMTP_PASS):
+    if not RESEND_API_KEY:
         return {
             "success": False,
-            "status": "SMTP_NOT_CONFIGURED",
-            "message": (
-                "SMTP_USER / SMTP_PASS are not set. For Gmail, create an App Password "
-                "(myaccount.google.com → Security → App passwords) and set it in Railway."
-            ),
+            "status": "RESEND_NOT_CONFIGURED",
+            "message": "RESEND_API_KEY is not set in Railway.",
+        }
+
+    if not SENDER_EMAIL:
+        return {
+            "success": False,
+            "status": "SENDER_NOT_CONFIGURED",
+            "message": "SENDER_EMAIL is not set. Configure a verified Resend sender address.",
         }
 
     try:
         return await asyncio.to_thread(
             _send_sync, recipient_email, subject, body, cv_file_path, reply_to
         )
-    except smtplib.SMTPAuthenticationError:
+    except httpx.HTTPError as e:
+        logger.error("Resend HTTP request failed: %s", e)
         return {
             "success": False,
-            "status": "AUTH_FAILED",
-            "message": (
-                "SMTP login was rejected. With Gmail you must use a 16-character App "
-                "Password, not your normal account password."
-            ),
+            "status": "HTTP_ERROR",
+            "message": f"Resend HTTP request failed: {e}",
         }
     except Exception as e:
-        logger.error(f"Email send failed: {e}")
+        logger.error("Email send failed: %s", e)
         return {"success": False, "status": "SEND_ERROR", "message": f"Failed to send: {e}"}
