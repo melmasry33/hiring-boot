@@ -414,6 +414,16 @@
           "Cleaned and preprocessed customer telecom data, then engineered and tuned an XGBoost model (SMOTE, GridSearchCV) to correct class imbalance, achieving approximately 80% recall on churn prediction.",
           "Made analytical findings accessible to non-technical stakeholders by building a natural-language chat interface (Qwen2.5-1.5B) on top of the model, deployed via FastAPI and Streamlit."
         ]
+      },
+      {
+        "name": "Estatio-AI (In Progress)",
+        "tech": "Python, Data Engineering, ETL, Machine Learning, LightGBM, Real Estate Analytics",
+        "links": "GitHub: https://github.com/Mohamed-Elmasry16/Estatio-AI",
+        "bullets": [
+          "Building an automated real-estate data pipeline that ingests listings from an API and moves data through Bronze ingestion, cleaning and validation, Silver processing, entity matching, and ready-for-analysis stages.",
+          "Designed an entity-matching system for property listings that combines geographic and listing attributes such as compound/phase, unit type, view, and address details, with hard mismatch rules to avoid false merges.",
+          "Developed a real-estate price prediction pipeline over 41K+ properties, evaluating multiple models and using LightGBM for price prediction with approximately 0.72 R², while integrating preprocessing, feature engineering, and model updates into the pipeline."
+        ]
       }
     ],
     "skills_categories": {
@@ -572,6 +582,16 @@
         "links": "GitHub: https://github.com/Mohamed-Elmasry16/machine_learning_from_scratch",
         "bullets": [
           "Implemented machine learning work from scratch, including neural-network and regression exercises, to strengthen first-principles understanding of model training and core ML concepts."
+        ]
+      },
+      {
+        "name": "Estatio-AI (In Progress)",
+        "tech": "Python, Data Engineering, ETL, Machine Learning, LightGBM, Real Estate Analytics",
+        "links": "GitHub: https://github.com/Mohamed-Elmasry16/Estatio-AI",
+        "bullets": [
+          "Building an automated real-estate data pipeline that ingests listings from an API and moves data through Bronze ingestion, cleaning and validation, Silver processing, entity matching, and ready-for-analysis stages.",
+          "Designed an entity-matching system for property listings that combines geographic and listing attributes such as compound/phase, unit type, view, and address details, with hard mismatch rules to avoid false merges.",
+          "Developed a real-estate price prediction pipeline over 41K+ properties, evaluating multiple models and using LightGBM for price prediction with approximately 0.72 R², while integrating preprocessing, feature engineering, and model updates into the pipeline."
         ]
       }
     ],
