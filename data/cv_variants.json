@@ -1,208 +1,662 @@
 {
   "ai": {
     "label": "AI / LLM / Agentic AI",
-    "roles": ["AI Engineer", "Agentic AI Engineer", "LLM Engineer", "Machine Learning Engineer"],
+    "roles": [
+      "AI Engineer",
+      "Agentic AI Engineer",
+      "LLM Engineer",
+      "Machine Learning Engineer"
+    ],
     "headline": "AI/ML Engineer - Agentic AI & LLM Systems",
     "summary": "Business-minded Computer Science graduate who bridges data, AI, and stakeholder needs. Built ETL pipelines and BI dashboards for business decisions during a Power BI internship, and independently shipped multiple AI applications, including a multi-agent BI copilot used to flag revenue leakage. Comfortable moving between technical execution and business communication, with hands-on exposure to LLMs, Agentic AI, and GenAI applied to real commercial problems. Eager to rotate across Product, Pre-Sales, and Delivery to see how Enterprise AI creates value end to end.",
     "experience": [
-      {"company":"Freelance","role":"AI Developer and SaaS Product Designer","period":"2025 - Present","bullets":[
-        "Design and build AI-powered SaaS products for clients end to end, from product scoping and UX flow through backend architecture and AI integration, translating client business goals into shipped features.",
-        "Deliver full-stack AI applications (Python/FastAPI backends, React/Next.js frontends) as a solo freelancer, managing client communication, timelines, and iteration based on feedback."
-      ]},
-      {"company":"Information Technology Institute (ITI)","role":"Power BI Development Intern","period":"Jan 2026 - Jun 2026","bullets":[
-        "Built ETL pipelines and data models with SQL and Power Query, and prototyped deep learning forecasting models in PyTorch, translating raw data into interactive dashboards non-technical stakeholders used for decisions.",
-        "Wrote DAX and SQL calculations to ensure accuracy across KPI and sales-trend reporting presented to business stakeholders."
-      ]},
-      {"company":"Deloitte Australia - Job Simulation (via Forage)","role":"Virtual Data Analyst","period":"Jul 2025 - Present","bullets":[
-        "Completed a self-paced consulting simulation applying Python and statistical methods to derive actionable business insights from client data, including stakeholder mapping and dataset preprocessing."
-      ]}
+      {
+        "company": "Freelance",
+        "role": "AI Developer and SaaS Product Designer",
+        "period": "2025 - Present",
+        "bullets": [
+          "Design and build AI-powered SaaS products for clients end to end, from product scoping and UX flow through backend architecture and AI integration, translating client business goals into shipped features.",
+          "Deliver full-stack AI applications (Python/FastAPI backends, React/Next.js frontends) as a solo freelancer, managing client communication, timelines, and iteration based on feedback."
+        ]
+      },
+      {
+        "company": "Information Technology Institute (ITI)",
+        "role": "Power BI Development Intern",
+        "period": "Jan 2026 - Jun 2026",
+        "bullets": [
+          "Built ETL pipelines and data models with SQL and Power Query, and prototyped deep learning forecasting models in PyTorch, translating raw data into interactive dashboards non-technical stakeholders used for decisions.",
+          "Wrote DAX and SQL calculations to ensure accuracy across KPI and sales-trend reporting presented to business stakeholders."
+        ]
+      },
+      {
+        "company": "Deloitte Australia - Job Simulation (via Forage)",
+        "role": "Virtual Data Analyst",
+        "period": "Jul 2025 - Present",
+        "bullets": [
+          "Completed a self-paced consulting simulation applying Python and statistical methods to derive actionable business insights from client data, including stakeholder mapping and dataset preprocessing."
+        ]
+      }
     ],
     "projects": [
-      {"name":"Recovera - Multi-Agent AI and BI Copilot","tech":"Python, FastAPI, Next.js, PostgreSQL, LangChain, Docker","links":"Live Demo: recovera-copilot.vercel.app | GitHub: github.com/Mohamed-Elmasry16/Recovera-Copilot-","bullets":[
-        "Built a production AI system letting business users ask plain-language questions and get secure, business-ready analytics back, no SQL required, via a multi-agent pipeline (planner, SQL generator, validator, executor, analytics interpreter).",
-        "Applied unsupervised anomaly detection (Isolation Forest and Local Outlier Factor) across approximately 298,000 orders to flag revenue leakage, tying an AI technique directly to a measurable commercial outcome.",
-        "Designed a PostgreSQL and pgvector schema for retrieval-augmented generation, and added a code-layer SQL validator (sqlglot and policy engine) so AI-generated queries stay safe at business scale; deployed end to end (Hugging Face Spaces, Vercel) with LangSmith tracing."
-      ]},
-      {"name":"Vector - AI Personal Assistant","tech":"Python, FastAPI, React, LangChain, PostgreSQL, Docker","links":"Live Demo: vector-ai-snowy.vercel.app | GitHub: github.com/Mohamed-Elmasry16/langchain-projects","bullets":[
-        "Developed an autonomous agent that selects between web search, document analysis, and other tools based on user intent, streaming its reasoning transparently, supporting the kind of trust and explainability that matters when selling AI to enterprise clients."
-      ]},
-      {"name":"Advanced RAG Pipeline","tech":"Python, LangChain, ChromaDB, Llama 3.3","links":"GitHub: github.com/Mohamed-Elmasry16 (link on request)","bullets":[
-        "Built an end-to-end retrieval-augmented generation pipeline with source citations and streaming responses, reducing hallucinations so business users can trust AI-generated answers, a key adoption barrier for Enterprise AI."
-      ]},
-      {"name":"Telecom Churn AI Assistant","tech":"Python, FastAPI, Streamlit, XGBoost, Hugging Face","links":"GitHub: github.com/Mohamed-Elmasry16/Telecom_churn_project","bullets":[
-        "Paired an XGBoost churn-prediction model with a natural-language chat interface so business users could query customer-retention risk directly, tuned with SMOTE and GridSearchCV to approximately 80 percent recall, a telecom-relevant use case."
-      ]},
-      {"name":"GPT-2 Style Transformer from Scratch","tech":"Python, PyTorch, NLP","links":"GitHub: github.com/Mohamed-Elmasry16/LLM-from-scratch","bullets":[
-        "Engineered a transformer from scratch, including tokenizer, self-attention, and a full training/inference pipeline, to build first-principles understanding of the LLMs behind today's Agentic AI and GenAI products."
-      ]}
+      {
+        "name": "Recovera - Multi-Agent AI and BI Copilot",
+        "tech": "Python, FastAPI, Next.js, PostgreSQL, LangChain, Docker",
+        "links": "Live Demo: recovera-copilot.vercel.app | GitHub: github.com/Mohamed-Elmasry16/Recovera-Copilot-",
+        "bullets": [
+          "Built a production AI system letting business users ask plain-language questions and get secure, business-ready analytics back, no SQL required, via a multi-agent pipeline (planner, SQL generator, validator, executor, analytics interpreter).",
+          "Applied unsupervised anomaly detection (Isolation Forest and Local Outlier Factor) across approximately 298,000 orders to flag revenue leakage, tying an AI technique directly to a measurable commercial outcome.",
+          "Designed a PostgreSQL and pgvector schema for retrieval-augmented generation, and added a code-layer SQL validator (sqlglot and policy engine) so AI-generated queries stay safe at business scale; deployed end to end (Hugging Face Spaces, Vercel) with LangSmith tracing."
+        ]
+      },
+      {
+        "name": "Vector - AI Personal Assistant",
+        "tech": "Python, FastAPI, React, LangChain, PostgreSQL, Docker",
+        "links": "Live Demo: vector-ai-snowy.vercel.app | GitHub: github.com/Mohamed-Elmasry16/langchain-projects",
+        "bullets": [
+          "Developed an autonomous agent that selects between web search, document analysis, and other tools based on user intent, streaming its reasoning transparently, supporting the kind of trust and explainability that matters when selling AI to enterprise clients."
+        ]
+      },
+      {
+        "name": "Advanced RAG Pipeline",
+        "tech": "Python, LangChain, ChromaDB, Llama 3.3",
+        "links": "GitHub: github.com/Mohamed-Elmasry16 (link on request)",
+        "bullets": [
+          "Built an end-to-end retrieval-augmented generation pipeline with source citations and streaming responses, reducing hallucinations so business users can trust AI-generated answers, a key adoption barrier for Enterprise AI."
+        ]
+      },
+      {
+        "name": "Telecom Churn AI Assistant",
+        "tech": "Python, FastAPI, Streamlit, XGBoost, Hugging Face",
+        "links": "GitHub: github.com/Mohamed-Elmasry16/Telecom_churn_project",
+        "bullets": [
+          "Paired an XGBoost churn-prediction model with a natural-language chat interface so business users could query customer-retention risk directly, tuned with SMOTE and GridSearchCV to approximately 80 percent recall, a telecom-relevant use case."
+        ]
+      },
+      {
+        "name": "GPT-2 Style Transformer from Scratch",
+        "tech": "Python, PyTorch, NLP",
+        "links": "GitHub: github.com/Mohamed-Elmasry16/LLM-from-scratch",
+        "bullets": [
+          "Engineered a transformer from scratch, including tokenizer, self-attention, and a full training/inference pipeline, to build first-principles understanding of the LLMs behind today's Agentic AI and GenAI products."
+        ]
+      }
     ],
     "skills_categories": {
-      "Business Intelligence and Analytics":["Power BI","DAX","Power Query","SQL","Data Modeling","KPI and Sales-Trend Reporting","Stakeholder Communication"],
-      "AI Technologies":["Large Language Models (LLMs)","Agentic AI","Generative AI (GenAI)","Retrieval-Augmented Generation (RAG)","Machine Learning","Prompt Engineering"],
-      "AI Frameworks and ML":["LangChain","Hugging Face Transformers","PyTorch","TensorFlow","Scikit-learn","XGBoost"],
-      "Programming Languages":["Python","SQL","TypeScript"],
-      "Backend, Frontend and Databases":["FastAPI","REST APIs","React","Next.js","PostgreSQL","Supabase"],
-      "Deployment and Tools":["Docker","Vercel","Hugging Face Spaces","Git","GitHub","Jupyter Notebook"],
-      "Soft Skills":["Business Acumen and Analytical Mindset","Excellent Communication and Presentation Skills","Strong Problem Solving Skills","Teamwork and Cross-Functional Collaboration","Adaptability in Fast-Paced Environments","Curiosity and Passion for Innovation"]
+      "Business Intelligence and Analytics": [
+        "Power BI",
+        "DAX",
+        "Power Query",
+        "SQL",
+        "Data Modeling",
+        "KPI and Sales-Trend Reporting",
+        "Stakeholder Communication"
+      ],
+      "AI Technologies": [
+        "Large Language Models (LLMs)",
+        "Agentic AI",
+        "Generative AI (GenAI)",
+        "Retrieval-Augmented Generation (RAG)",
+        "Machine Learning",
+        "Prompt Engineering"
+      ],
+      "AI Frameworks and ML": [
+        "LangChain",
+        "Hugging Face Transformers",
+        "PyTorch",
+        "TensorFlow",
+        "Scikit-learn",
+        "XGBoost"
+      ],
+      "Programming Languages": [
+        "Python",
+        "SQL",
+        "TypeScript"
+      ],
+      "Backend, Frontend and Databases": [
+        "FastAPI",
+        "REST APIs",
+        "React",
+        "Next.js",
+        "PostgreSQL",
+        "Supabase"
+      ],
+      "Deployment and Tools": [
+        "Docker",
+        "Vercel",
+        "Hugging Face Spaces",
+        "Git",
+        "GitHub",
+        "Jupyter Notebook"
+      ],
+      "Soft Skills": [
+        "Business Acumen and Analytical Mindset",
+        "Excellent Communication and Presentation Skills",
+        "Strong Problem Solving Skills",
+        "Teamwork and Cross-Functional Collaboration",
+        "Adaptability in Fast-Paced Environments",
+        "Curiosity and Passion for Innovation"
+      ]
     },
-    "education":["Bachelor of Science, Computer Science - Final Grade: Very Good - El Shorouk Academy, Cairo, Egypt (Sep 2020 - Aug 2024)"],
-    "certifications":["DataCamp: Data Analyst Associate Certificate","DataCamp: SQL Associate Certificate","DataCamp: Python Data Associate Certificate","IBM (Coursera): Databases and SQL for Data Science","Coursera: Introduction to Data Analysis with Excel","HackerRank: SQL (Basic) Certificate","ITI Mahara-Tech (AI Academy): Python Programming Basics","Coursera: Mathematics for Machine Learning and Data Science Specialization","DeepLearning.AI: Advanced Learning Algorithms","Coursera: Supervised Machine Learning","IBM (Coursera): Python for Data Science, AI and Development"],
-    "languages":["Arabic (Native)","English (Proficient)"],
-    "additional_information":"Military Service: Completed mandatory military duty."
+    "education": [
+      "Bachelor of Science, Computer Science - Final Grade: Very Good - El Shorouk Academy, Cairo, Egypt (Sep 2020 - Aug 2024)"
+    ],
+    "certifications": [
+      "DataCamp: Data Analyst Associate Certificate",
+      "DataCamp: SQL Associate Certificate",
+      "DataCamp: Python Data Associate Certificate",
+      "IBM (Coursera): Databases and SQL for Data Science",
+      "Coursera: Introduction to Data Analysis with Excel",
+      "HackerRank: SQL (Basic) Certificate",
+      "ITI Mahara-Tech (AI Academy): Python Programming Basics",
+      "Coursera: Mathematics for Machine Learning and Data Science Specialization",
+      "DeepLearning.AI: Advanced Learning Algorithms",
+      "Coursera: Supervised Machine Learning",
+      "IBM (Coursera): Python for Data Science, AI and Development"
+    ],
+    "languages": [
+      "Arabic (Native)",
+      "English (Proficient)"
+    ],
+    "additional_information": "Military Service: Completed mandatory military duty."
   },
   "bi": {
     "label": "BI / Power BI",
-    "roles": ["Power BI Developer", "BI Developer", "Business Intelligence", "Reporting", "BI Analyst"],
+    "roles": [
+      "Power BI Developer",
+      "BI Developer",
+      "Business Intelligence",
+      "Reporting",
+      "BI Analyst"
+    ],
     "headline": "Power BI Developer | Data Analytics & BI Solutions",
     "summary": "Data professional with hands-on Power BI development experience gained through a Business Intelligence internship at the Information Technology Institute (ITI), where I delivered 10 Power BI reports and built 3 data warehouses. Strong foundation in SQL, data modeling, and the full data pipeline from raw source data to clean, model-ready datasets, combined with Python-based data analysis (Pandas, Scikit-learn) for deeper analytical support. Comfortable gathering reporting requirements, building dashboards end-to-end, and troubleshooting data issues; continuing to build depth in DAX and Power BI Service administration (RLS, gateways, workspace management).",
     "experience": [
-      {"company":"Information Technology Institute (ITI), Menofia Branch, Egypt","role":"Power BI Development Intern","period":"Jan 2026 - Jun 2026","bullets":[
-        "Delivered 10 Power BI reports and built 3 data warehouses (DWH), gathering reporting requirements and performing data cleaning, manipulation, and problem-solving to transform raw source data into clean, model-ready datasets.",
-        "Built dashboards and data models to support business reporting needs, applying foundational DAX measures and Power Query/M transformations as part of the development workflow.",
-        "Prototyped deep learning forecasting models in PyTorch on top of cleaned datasets to support data-driven planning, bridging BI reporting with predictive analytics."
-      ]},
-      {"company":"Freelance","role":"AI Developer","period":"2025 - Present","bullets":[
-        "Built an end-to-end attendance and payroll automation system deployed across multiple client locations, eliminating manual attendance recording and enabling real-time monitoring across all sites.",
-        "Developed a machine-learning-based soil classification system as part of a full-stack solution for an agriculture-focused client, translating raw data into actionable business decisions.",
-        "Independently architected and shipped production-ready solutions as the sole developer on each engagement, iterating based on direct client feedback - demonstrating the requirement-gathering and troubleshooting skills central to BI delivery."
-      ]}
+      {
+        "company": "Information Technology Institute (ITI), Menofia Branch, Egypt",
+        "role": "Power BI Development Intern",
+        "period": "Jan 2026 - Jun 2026",
+        "bullets": [
+          "Delivered 10 Power BI reports and built 3 data warehouses (DWH), gathering reporting requirements and performing data cleaning, manipulation, and problem-solving to transform raw source data into clean, model-ready datasets.",
+          "Built dashboards and data models to support business reporting needs, applying foundational DAX measures and Power Query/M transformations as part of the development workflow.",
+          "Prototyped deep learning forecasting models in PyTorch on top of cleaned datasets to support data-driven planning, bridging BI reporting with predictive analytics."
+        ]
+      },
+      {
+        "company": "Freelance",
+        "role": "AI Developer",
+        "period": "2025 - Present",
+        "bullets": [
+          "Built an end-to-end attendance and payroll automation system deployed across multiple client locations, eliminating manual attendance recording and enabling real-time monitoring across all sites.",
+          "Developed a machine-learning-based soil classification system as part of a full-stack solution for an agriculture-focused client, translating raw data into actionable business decisions.",
+          "Independently architected and shipped production-ready solutions as the sole developer on each engagement, iterating based on direct client feedback - demonstrating the requirement-gathering and troubleshooting skills central to BI delivery."
+        ]
+      }
     ],
     "projects": [
-      {"name":"Recovera - Multi-Agent AI and BI Copilot","tech":"Python, SQL, PostgreSQL, FastAPI, LangChain, Docker","links":"Live Demo: recovera-copilot.vercel.app | GitHub: github.com/Mohamed-Elmasry16/Recovera-Copilot-","bullets":[
-        "Architected a 5-stage multi-agent pipeline that converts natural-language questions into validated SQL and analytics output, backed by a PostgreSQL + pgvector data layer - directly applying SQL, data modeling, and BI reasoning skills.",
-        "Wrote efficient, validated SQL to extract and aggregate data, with a code-layer SQL validator (sqlglot + policy engine) to keep generated queries safe and performant at scale."
-      ]},
-      {"name":"Telecom Churn Analysis & Prediction","tech":"Python, Pandas, Scikit-learn, XGBoost, Streamlit","links":"GitHub: github.com/Mohamed-Elmasry16/Telecom-churn-project","bullets":[
-        "Performed EDA, data cleaning, and feature engineering on customer telecom data, then built and benchmarked a supervised XGBoost model, tuning with SMOTE and GridSearchCV to correct class imbalance and achieve approximately 80% recall.",
-        "Deployed a real-time interactive analytics application with Streamlit, layering a natural-language chat interface (Qwen2.5-1.5B) on top of the model for non-technical users - similar to the self-service reporting goals of a BI tool."
-      ]},
-      {"name":"Handwritten Digit Recognition (CNN)","tech":"Python, TensorFlow/PyTorch, Computer Vision","links":"","bullets":[
-        "Built and trained a Convolutional Neural Network (CNN) for handwritten digit classification on the MNIST dataset, achieving 97.16% test accuracy (test MSE of 0.252)."
-      ]},
-      {"name":"ECHO Virtual Assistant - Vision-Based Virtual Mouse & Keyboard","tech":"Python, OpenCV, Computer Vision, NLP","links":"Graduation Project, rated Excellent","bullets":[
-        "Built a real-time hand-tracking system with OpenCV that detects hand landmarks and gestures via webcam, translating hand movement into cursor control and keystrokes for a fully touchless virtual mouse and keyboard.",
-        "Combined the computer vision input layer with an NLP-based conversational assistant to deliver a multimodal virtual assistant, integrating vision and language processing in a single graduation project."
-      ]}
+      {
+        "name": "Recovera - Multi-Agent AI and BI Copilot",
+        "tech": "Python, SQL, PostgreSQL, FastAPI, LangChain, Docker",
+        "links": "Live Demo: recovera-copilot.vercel.app | GitHub: github.com/Mohamed-Elmasry16/Recovera-Copilot-",
+        "bullets": [
+          "Architected a 5-stage multi-agent pipeline that converts natural-language questions into validated SQL and analytics output, backed by a PostgreSQL + pgvector data layer - directly applying SQL, data modeling, and BI reasoning skills.",
+          "Wrote efficient, validated SQL to extract and aggregate data, with a code-layer SQL validator (sqlglot + policy engine) to keep generated queries safe and performant at scale."
+        ]
+      },
+      {
+        "name": "Telecom Churn Analysis & Prediction",
+        "tech": "Python, Pandas, Scikit-learn, XGBoost, Streamlit",
+        "links": "GitHub: github.com/Mohamed-Elmasry16/Telecom-churn-project",
+        "bullets": [
+          "Performed EDA, data cleaning, and feature engineering on customer telecom data, then built and benchmarked a supervised XGBoost model, tuning with SMOTE and GridSearchCV to correct class imbalance and achieve approximately 80% recall.",
+          "Deployed a real-time interactive analytics application with Streamlit, layering a natural-language chat interface (Qwen2.5-1.5B) on top of the model for non-technical users - similar to the self-service reporting goals of a BI tool."
+        ]
+      },
+      {
+        "name": "Handwritten Digit Recognition (CNN)",
+        "tech": "Python, TensorFlow/PyTorch, Computer Vision",
+        "links": "",
+        "bullets": [
+          "Built and trained a Convolutional Neural Network (CNN) for handwritten digit classification on the MNIST dataset, achieving 97.16% test accuracy (test MSE of 0.252)."
+        ]
+      },
+      {
+        "name": "ECHO Virtual Assistant - Vision-Based Virtual Mouse & Keyboard",
+        "tech": "Python, OpenCV, Computer Vision, NLP",
+        "links": "Graduation Project, rated Excellent",
+        "bullets": [
+          "Built a real-time hand-tracking system with OpenCV that detects hand landmarks and gestures via webcam, translating hand movement into cursor control and keystrokes for a fully touchless virtual mouse and keyboard.",
+          "Combined the computer vision input layer with an NLP-based conversational assistant to deliver a multimodal virtual assistant, integrating vision and language processing in a single graduation project."
+        ]
+      },
+      {
+        "name": "ITI Power BI Dashboards",
+        "tech": "Power BI",
+        "links": "GitHub: https://github.com/Mohamed-Elmasry16/ITI-powerbi-dashboards",
+        "bullets": [
+          "Built and documented four Power BI dashboard projects covering sales performance, executive sales insights, strategic sales analysis, and flight reliability and delay analytics."
+        ]
+      }
     ],
-    "skills_categories":{
-      "Business Intelligence":["Power BI Desktop","Power BI Service","Report & Dashboard Design","Data Warehousing (DWH)","Power Query/M","DAX (foundational)","Data Modeling"],
-      "Data & SQL":["SQL","PostgreSQL","ChromaDB","pgvector (Vector Databases)","Relational Databases","Data Cleaning","ETL/Data Transformation","Dimensional Modeling"],
-      "Python for Data Science":["Python","Pandas","NumPy","Scikit-learn","Matplotlib","Exploratory Data Analysis (EDA)","Feature Engineering","Handling Imbalanced Data (SMOTE)"],
-      "ML & Deep Learning":["Supervised & Unsupervised ML","Model Evaluation & Benchmarking","PyTorch","TensorFlow","CNNs","Transformer Architectures","XGBoost"],
-      "Computer Vision":["OpenCV","Real-Time Hand/Gesture Tracking","Image Classification (CNNs)"],
-      "Generative AI & RAG":["Large Language Models (LLMs)","Retrieval-Augmented Generation (RAG)","Prompt Engineering","Tokenization & Embeddings","Natural Language Processing (NLP)"],
-      "Agentic AI":["Multi-Agent Orchestration","Autonomous Tool Calling","Agent Architecture Design"],
-      "LLM API Integration":["OpenRouter","Groq","Hugging Face Inference","LangChain","LangSmith (Observability)"],
-      "App Deployment & Tools":["Streamlit","FastAPI","REST APIs","Real-Time Interactive ML Applications","Docker","Vercel","Hugging Face Spaces","Git","GitHub"],
-      "Soft Skills":["Analytical Problem-Solving","Requirements Gathering","Cross-Functional Collaboration","Clear Technical Communication","Adaptability","Independent Ownership & Delivery"]
+    "skills_categories": {
+      "Business Intelligence": [
+        "Power BI Desktop",
+        "Power BI Service",
+        "Report & Dashboard Design",
+        "Data Warehousing (DWH)",
+        "Power Query/M",
+        "DAX (foundational)",
+        "Data Modeling"
+      ],
+      "Data & SQL": [
+        "SQL",
+        "PostgreSQL",
+        "ChromaDB",
+        "pgvector (Vector Databases)",
+        "Relational Databases",
+        "Data Cleaning",
+        "ETL/Data Transformation",
+        "Dimensional Modeling"
+      ],
+      "Python for Data Science": [
+        "Python",
+        "Pandas",
+        "NumPy",
+        "Scikit-learn",
+        "Matplotlib",
+        "Exploratory Data Analysis (EDA)",
+        "Feature Engineering",
+        "Handling Imbalanced Data (SMOTE)"
+      ],
+      "ML & Deep Learning": [
+        "Supervised & Unsupervised ML",
+        "Model Evaluation & Benchmarking",
+        "PyTorch",
+        "TensorFlow",
+        "CNNs",
+        "Transformer Architectures",
+        "XGBoost"
+      ],
+      "Computer Vision": [
+        "OpenCV",
+        "Real-Time Hand/Gesture Tracking",
+        "Image Classification (CNNs)"
+      ],
+      "Generative AI & RAG": [
+        "Large Language Models (LLMs)",
+        "Retrieval-Augmented Generation (RAG)",
+        "Prompt Engineering",
+        "Tokenization & Embeddings",
+        "Natural Language Processing (NLP)"
+      ],
+      "Agentic AI": [
+        "Multi-Agent Orchestration",
+        "Autonomous Tool Calling",
+        "Agent Architecture Design"
+      ],
+      "LLM API Integration": [
+        "OpenRouter",
+        "Groq",
+        "Hugging Face Inference",
+        "LangChain",
+        "LangSmith (Observability)"
+      ],
+      "App Deployment & Tools": [
+        "Streamlit",
+        "FastAPI",
+        "REST APIs",
+        "Real-Time Interactive ML Applications",
+        "Docker",
+        "Vercel",
+        "Hugging Face Spaces",
+        "Git",
+        "GitHub"
+      ],
+      "Soft Skills": [
+        "Analytical Problem-Solving",
+        "Requirements Gathering",
+        "Cross-Functional Collaboration",
+        "Clear Technical Communication",
+        "Adaptability",
+        "Independent Ownership & Delivery"
+      ]
     },
-    "education":["B.Sc., Computer Science - Very Good - El Shorouk Academy, Cairo, Egypt (Sep 2019 - Aug 2023)","Graduation Project: ECHO Virtual Assistant - rated Excellent"],
-    "certifications":["Data & SQL: DataCamp Associate Data Analyst, Associate Data Engineer in SQL, SQL Associate, Python Data Associate; IBM Databases and SQL for Data Science with Python (with Honors); HackerRank SQL & Python (Basic).","Machine Learning & AI: Mathematics for ML and Data Science Specialization, Supervised Machine Learning, Advanced Learning Algorithms (DeepLearning.AI), Practical ML for Data Science, Generative AI (ITI MaharaTech).","Data Science Foundations (IBM/Coursera): Python for Data Science AI and Development, Python Project for Data Science, Tools for Data Science, What is Data Science; ITI Mahara-Tech Python Programming Basics."],
-    "languages":["Arabic (Native)","English (Proficient)"],
-    "additional_information":"Military Service: Completed mandatory military duty."
+    "education": [
+      "B.Sc., Computer Science - Very Good - El Shorouk Academy, Cairo, Egypt (Sep 2019 - Aug 2023)",
+      "Graduation Project: ECHO Virtual Assistant - rated Excellent"
+    ],
+    "certifications": [
+      "Data & SQL: DataCamp Associate Data Analyst, Associate Data Engineer in SQL, SQL Associate, Python Data Associate; IBM Databases and SQL for Data Science with Python (with Honors); HackerRank SQL & Python (Basic).",
+      "Machine Learning & AI: Mathematics for ML and Data Science Specialization, Supervised Machine Learning, Advanced Learning Algorithms (DeepLearning.AI), Practical ML for Data Science, Generative AI (ITI MaharaTech).",
+      "Data Science Foundations (IBM/Coursera): Python for Data Science AI and Development, Python Project for Data Science, Tools for Data Science, What is Data Science; ITI Mahara-Tech Python Programming Basics."
+    ],
+    "languages": [
+      "Arabic (Native)",
+      "English (Proficient)"
+    ],
+    "additional_information": "Military Service: Completed mandatory military duty."
   },
   "data_analyst": {
     "label": "Data Analyst",
-    "roles": ["Data Analyst", "Business Analyst", "Operations Analytics", "Supply Chain Analytics", "Product Analytics"],
+    "roles": [
+      "Data Analyst",
+      "Business Analyst",
+      "Operations Analytics",
+      "Supply Chain Analytics",
+      "Product Analytics"
+    ],
     "headline": "Data Analyst - Supply Chain Analytics, SQL, Power BI & Python",
     "summary": "Data Analyst with hands-on experience building ETL pipelines, validating data accuracy, and delivering decision-ready insights through SQL, Power BI, Tableau, and Python. Built a Logistics & Fulfillment analytics suite within Recovera covering freight cost, carrier performance, and shipment fulfillment across 298K+ orders - surfacing a $12.06M freight-margin gap and $2.65M in inventory-mismatch revenue at risk. Also built an operational-reliability analytics hub over 2M+ transportation records (on-time performance, delay-cause breakdown, carrier reliability rankings). Comfortable across the full analytics workflow: requirement gathering, data cleaning, validation and reconciliation, predictive modeling, dashboard build, and translating findings into recommendations for cross-functional, non-technical stakeholders.",
-    "experience":[
-      {"company":"Information Technology Institute (ITI), Menofia Branch, Egypt","role":"Power BI Development Intern","period":"Jan 2026 - Jun 2026","bullets":[
-        "Improved data readiness for forecasting and reporting by building automated ETL pipelines (SQL, Power Query) that transformed raw source data into clean, analysis-ready datasets.",
-        "Validated data accuracy and consistency across reports by writing DAX and SQL calculations and reconciling KPI and sales-trend figures against source data before publishing dashboards.",
-        "Built a Flight Reliability & Delay Analytics Hub analyzing 2M+ flight records (5K aircraft, 1B+ miles) - surfacing an 11.02% on-time performance rate, a delay-cause breakdown (carrier, weather, NAS, security), and carrier/origin-level reliability rankings through interactive time-of-day and date-range filters.",
-        "Built three progressively advanced Power BI sales dashboards on the AdventureWorks dataset, scaling from an initial 1,465-order view to a full executive dashboard covering 31K+ orders and $123M+ in total amount due, with dynamic slicers and drill-down by year, territory, and sales rep.",
-        "Prototyped deep learning forecasting models in PyTorch on top of cleaned datasets to support data-driven planning and decision-making."
-      ]},
-      {"company":"Deloitte Australia (Job Simulation via Forage)","role":"Virtual Data Analyst","period":"Jul 2025 - Present","bullets":[
-        "Applied Python and statistical analysis methods to derive actionable insights from client datasets, including cross-functional stakeholder mapping and data preprocessing, as part of a self-paced simulation of Deloitte's data analyst workflow."
-      ]},
-      {"company":"Freelance","role":"AI Developer","period":"2025 - Present","bullets":[
-        "Built data-driven backend systems for clients by integrating SQL databases (PostgreSQL) and Python data-processing logic into full-stack applications, gathering requirements from business stakeholders and delivering through iterative build-test-feedback cycles."
-      ]}
+    "experience": [
+      {
+        "company": "Information Technology Institute (ITI), Menofia Branch, Egypt",
+        "role": "Power BI Development Intern",
+        "period": "Jan 2026 - Jun 2026",
+        "bullets": [
+          "Improved data readiness for forecasting and reporting by building automated ETL pipelines (SQL, Power Query) that transformed raw source data into clean, analysis-ready datasets.",
+          "Validated data accuracy and consistency across reports by writing DAX and SQL calculations and reconciling KPI and sales-trend figures against source data before publishing dashboards.",
+          "Built a Flight Reliability & Delay Analytics Hub analyzing 2M+ flight records (5K aircraft, 1B+ miles) - surfacing an 11.02% on-time performance rate, a delay-cause breakdown (carrier, weather, NAS, security), and carrier/origin-level reliability rankings through interactive time-of-day and date-range filters.",
+          "Built three progressively advanced Power BI sales dashboards on the AdventureWorks dataset, scaling from an initial 1,465-order view to a full executive dashboard covering 31K+ orders and $123M+ in total amount due, with dynamic slicers and drill-down by year, territory, and sales rep.",
+          "Prototyped deep learning forecasting models in PyTorch on top of cleaned datasets to support data-driven planning and decision-making."
+        ]
+      },
+      {
+        "company": "Deloitte Australia (Job Simulation via Forage)",
+        "role": "Virtual Data Analyst",
+        "period": "Jul 2025 - Present",
+        "bullets": [
+          "Applied Python and statistical analysis methods to derive actionable insights from client datasets, including cross-functional stakeholder mapping and data preprocessing, as part of a self-paced simulation of Deloitte's data analyst workflow."
+        ]
+      },
+      {
+        "company": "Freelance",
+        "role": "AI Developer",
+        "period": "2025 - Present",
+        "bullets": [
+          "Built data-driven backend systems for clients by integrating SQL databases (PostgreSQL) and Python data-processing logic into full-stack applications, gathering requirements from business stakeholders and delivering through iterative build-test-feedback cycles."
+        ]
+      }
     ],
-    "projects":[
-      {"name":"Recovera - Logistics Analytics & Natural Language to SQL Copilot","tech":"Python, SQL, Power BI, PostgreSQL, LangChain, Docker","links":"Live Demo: recovera-copilot.vercel.app | GitHub: github.com/Mohamed-Elmasry16/Recovera-Copilot-","bullets":[
-        "Built a Logistics & Fulfillment analytics suite (Power BI) tracking carrier cost and margin, shipment status, and fulfillment performance across 298K+ orders - surfacing a $12.06M (-60%) freight-margin gap and evenly distributed carrier volume that limits single-partner dependency risk.",
-        "Flagged $2.65M in revenue at risk through inventory-mismatch and logistics-cost anomaly detection (785 flagged orders), including per-shipment overcharge patterns of $570-$853 concentrated in specific carriers, with root-cause grouping by seller, category, and month for operational follow-up.",
-        "Built a pipeline that converts natural-language business questions into validated SQL queries and analytics output, combining query generation, execution, and results interpretation for end users.",
-        "Enforced data quality and governance at scale with a code-layer SQL validator (sqlglot + policy engine) that checks every generated query for consistency and safety before execution."
-      ]},
-      {"name":"Tableau Analytics Workbooks","tech":"Tableau, Parameters, Calculated Fields, Geographic Mapping","links":"","bullets":[
-        "Built four Tableau workbooks analyzing retail sales, UK bank customer demographics, and HR workforce data, using bar, pie, area, and geographic map visualizations to surface trends across customer, product, and financial datasets.",
-        "Implemented dynamic parameters (Sales-vs-Revenue toggle, Top-N filtering) and calculated fields (age/balance binning, city-level percentage breakdowns, employee satisfaction scoring) to make dashboards interactively explorable rather than static."
-      ]},
-      {"name":"Telecom Churn Analysis & Prediction","tech":"Python, SQL, XGBoost, Pandas, Hugging Face","links":"GitHub: github.com/Mohamed-Elmasry16/Telecom-churn-project","bullets":[
-        "Cleaned and preprocessed customer telecom data, then engineered and tuned an XGBoost model (SMOTE, GridSearchCV) to correct class imbalance, achieving approximately 80% recall on churn prediction.",
-        "Made analytical findings accessible to non-technical stakeholders by building a natural-language chat interface (Qwen2.5-1.5B) on top of the model, deployed via FastAPI and Streamlit."
-      ]}
+    "projects": [
+      {
+        "name": "Recovera - Logistics Analytics & Natural Language to SQL Copilot",
+        "tech": "Python, SQL, Power BI, PostgreSQL, LangChain, Docker",
+        "links": "Live Demo: recovera-copilot.vercel.app | GitHub: github.com/Mohamed-Elmasry16/Recovera-Copilot-",
+        "bullets": [
+          "Built a Logistics & Fulfillment analytics suite (Power BI) tracking carrier cost and margin, shipment status, and fulfillment performance across 298K+ orders - surfacing a $12.06M (-60%) freight-margin gap and evenly distributed carrier volume that limits single-partner dependency risk.",
+          "Flagged $2.65M in revenue at risk through inventory-mismatch and logistics-cost anomaly detection (785 flagged orders), including per-shipment overcharge patterns of $570-$853 concentrated in specific carriers, with root-cause grouping by seller, category, and month for operational follow-up.",
+          "Built a pipeline that converts natural-language business questions into validated SQL queries and analytics output, combining query generation, execution, and results interpretation for end users.",
+          "Enforced data quality and governance at scale with a code-layer SQL validator (sqlglot + policy engine) that checks every generated query for consistency and safety before execution."
+        ]
+      },
+      {
+        "name": "Tableau Analytics Workbooks",
+        "tech": "Tableau, Parameters, Calculated Fields, Geographic Mapping",
+        "links": "",
+        "bullets": [
+          "Built four Tableau workbooks analyzing retail sales, UK bank customer demographics, and HR workforce data, using bar, pie, area, and geographic map visualizations to surface trends across customer, product, and financial datasets.",
+          "Implemented dynamic parameters (Sales-vs-Revenue toggle, Top-N filtering) and calculated fields (age/balance binning, city-level percentage breakdowns, employee satisfaction scoring) to make dashboards interactively explorable rather than static."
+        ]
+      },
+      {
+        "name": "Telecom Churn Analysis & Prediction",
+        "tech": "Python, SQL, XGBoost, Pandas, Hugging Face",
+        "links": "GitHub: github.com/Mohamed-Elmasry16/Telecom-churn-project",
+        "bullets": [
+          "Cleaned and preprocessed customer telecom data, then engineered and tuned an XGBoost model (SMOTE, GridSearchCV) to correct class imbalance, achieving approximately 80% recall on churn prediction.",
+          "Made analytical findings accessible to non-technical stakeholders by building a natural-language chat interface (Qwen2.5-1.5B) on top of the model, deployed via FastAPI and Streamlit."
+        ]
+      }
     ],
-    "skills_categories":{
-      "Data Analysis & Quality":["Statistical Analysis","Predictive Modeling","Data Cleaning & Preprocessing","Data Validation & Reconciliation","Exploratory Data Analysis"],
-      "Logistics & Operations Analytics":["Freight & Carrier Cost Analysis","Shipment Fulfillment Tracking","Inventory-Mismatch Detection","Logistics-Cost Anomaly Flagging"],
-      "SQL & Databases":["SQL","PostgreSQL","Query Writing & Validation","Data Warehousing Concepts","Structured Data Models"],
-      "Business Intelligence":["Power BI (KPI Cards, Slicers, Drill-Down Dashboards)","Tableau (Parameters, Calculated Fields, Geographic Maps)","Power Query","Microsoft Excel (Data Analysis)","Dashboard & Report Building","ETL Pipeline Design"],
-      "Programming":["Python (Advanced - Pandas-based data workflows)","SQL","TypeScript"],
-      "Machine Learning Tools":["XGBoost","Scikit-learn","PyTorch","GridSearchCV","SMOTE (Imbalanced Data Handling)"],
-      "Data Pipelines & Automation":["ETL/ELT","Automated Reporting Workflows","REST APIs","LLM API Integration (OpenRouter, Groq, Hugging Face)"],
-      "Deployment & Tools":["Docker","Vercel","Git","GitHub","FastAPI"],
-      "Soft Skills":["Cross-Functional Stakeholder Collaboration","Business Requirement Gathering","Iterative Delivery & Testing","Technical Documentation","Ad Hoc Analysis & Troubleshooting","Translating Data into Business Insights"]
+    "skills_categories": {
+      "Data Analysis & Quality": [
+        "Statistical Analysis",
+        "Predictive Modeling",
+        "Data Cleaning & Preprocessing",
+        "Data Validation & Reconciliation",
+        "Exploratory Data Analysis"
+      ],
+      "Logistics & Operations Analytics": [
+        "Freight & Carrier Cost Analysis",
+        "Shipment Fulfillment Tracking",
+        "Inventory-Mismatch Detection",
+        "Logistics-Cost Anomaly Flagging"
+      ],
+      "SQL & Databases": [
+        "SQL",
+        "PostgreSQL",
+        "Query Writing & Validation",
+        "Data Warehousing Concepts",
+        "Structured Data Models"
+      ],
+      "Business Intelligence": [
+        "Power BI (KPI Cards, Slicers, Drill-Down Dashboards)",
+        "Tableau (Parameters, Calculated Fields, Geographic Maps)",
+        "Power Query",
+        "Microsoft Excel (Data Analysis)",
+        "Dashboard & Report Building",
+        "ETL Pipeline Design"
+      ],
+      "Programming": [
+        "Python (Advanced - Pandas-based data workflows)",
+        "SQL",
+        "TypeScript"
+      ],
+      "Machine Learning Tools": [
+        "XGBoost",
+        "Scikit-learn",
+        "PyTorch",
+        "GridSearchCV",
+        "SMOTE (Imbalanced Data Handling)"
+      ],
+      "Data Pipelines & Automation": [
+        "ETL/ELT",
+        "Automated Reporting Workflows",
+        "REST APIs",
+        "LLM API Integration (OpenRouter, Groq, Hugging Face)"
+      ],
+      "Deployment & Tools": [
+        "Docker",
+        "Vercel",
+        "Git",
+        "GitHub",
+        "FastAPI"
+      ],
+      "Soft Skills": [
+        "Cross-Functional Stakeholder Collaboration",
+        "Business Requirement Gathering",
+        "Iterative Delivery & Testing",
+        "Technical Documentation",
+        "Ad Hoc Analysis & Troubleshooting",
+        "Translating Data into Business Insights"
+      ]
     },
-    "education":["Bachelor of Science, Computer Science - Very Good - El Shorouk Academy, Cairo, Egypt (Sep 2019 - Aug 2023)","Graduation Project: ECHO Virtual Assistant - rated Excellent"],
-    "certifications":["Data Analytics & SQL: DataCamp Associate Data Analyst Certification, Associate Data Engineer in SQL, SQL Associate, Python Data Associate","IBM (Coursera): Databases and SQL for Data Science with Python - completed with Honors","Coursera Project Network: Introduction to Data Analysis using Microsoft Excel","HackerRank: SQL (Basic), Python (Basic)","Coursera: Mathematics for Machine Learning and Data Science Specialization, Supervised Machine Learning","DeepLearning.AI: Advanced Learning Algorithms","Data Science Foundations (IBM/Coursera): Python for Data Science AI and Development; Python Project for Data Science; Tools for Data Science; What is Data Science; ITI Mahara-Tech: Practical Machine Learning for Data Science, Generative AI, Python Programming Basics"],
-    "languages":["Arabic (Native)","English (Proficient)"],
-    "additional_information":"Military Service: Completed mandatory military duty."
+    "education": [
+      "Bachelor of Science, Computer Science - Very Good - El Shorouk Academy, Cairo, Egypt (Sep 2019 - Aug 2023)",
+      "Graduation Project: ECHO Virtual Assistant - rated Excellent"
+    ],
+    "certifications": [
+      "Data Analytics & SQL: DataCamp Associate Data Analyst Certification, Associate Data Engineer in SQL, SQL Associate, Python Data Associate",
+      "IBM (Coursera): Databases and SQL for Data Science with Python - completed with Honors",
+      "Coursera Project Network: Introduction to Data Analysis using Microsoft Excel",
+      "HackerRank: SQL (Basic), Python (Basic)",
+      "Coursera: Mathematics for Machine Learning and Data Science Specialization, Supervised Machine Learning",
+      "DeepLearning.AI: Advanced Learning Algorithms",
+      "Data Science Foundations (IBM/Coursera): Python for Data Science AI and Development; Python Project for Data Science; Tools for Data Science; What is Data Science; ITI Mahara-Tech: Practical Machine Learning for Data Science, Generative AI, Python Programming Basics"
+    ],
+    "languages": [
+      "Arabic (Native)",
+      "English (Proficient)"
+    ],
+    "additional_information": "Military Service: Completed mandatory military duty."
   },
   "data_scientist": {
     "label": "Junior Data Scientist",
-    "roles": ["Junior Data Scientist", "Data Scientist", "Machine Learning Engineer", "ML Engineer", "Applied Scientist"],
+    "roles": [
+      "Junior Data Scientist",
+      "Data Scientist",
+      "Machine Learning Engineer",
+      "ML Engineer",
+      "Applied Scientist"
+    ],
     "headline": "Junior Data Scientist - Python, ML/DL & Generative AI",
     "summary": "Junior Data Scientist with hands-on experience across the full ML lifecycle: EDA, data cleaning, feature engineering, and building/benchmarking supervised and unsupervised ML models and deep learning architectures in Python (Pandas, Scikit-learn, PyTorch, TensorFlow). Built a CNN reaching 97.16% test accuracy on MNIST, a real-time OpenCV hand-tracking system for a vision-based virtual mouse/keyboard, and a GPT-2-style transformer from scratch for first-principles understanding of deep learning. Shipped Generative AI and RAG applications, including a 5-stage multi-agent BI copilot that generates and validates SQL queries, backed by 15+ professional certifications across data science, ML, and SQL. Experienced deploying real-time ML applications with Streamlit.",
-    "experience":[
-      {"company":"Freelance","role":"AI Developer","period":"2025 - Present","bullets":[
-        "Built an end-to-end attendance and payroll automation system deployed across multiple client locations, eliminating manual attendance recording, automating payroll calculation, and enabling real-time monitoring of workers across all sites.",
-        "Developed a machine-learning-based soil classification system to help determine optimal land use, delivered as part of a full-stack solution for an agriculture-focused client.",
-        "Reduced client dependency on manual processes by independently architecting and shipping production-ready agent logic and LLM API integrations, iterating based on direct client feedback as the sole developer on each engagement."
-      ]},
-      {"company":"Information Technology Institute (ITI), Menofia Branch, Egypt","role":"Power BI Development Intern","period":"Jan 2026 - Jun 2026","bullets":[
-        "Delivered 10 Power BI reports and built 3 data warehouses (DWH), performing data cleaning, manipulation, and problem-solving to transform raw source data into clean, model-ready datasets.",
-        "Prototyped deep learning forecasting models in PyTorch on top of the cleaned datasets to support data-driven planning."
-      ]}
+    "experience": [
+      {
+        "company": "Freelance",
+        "role": "AI Developer",
+        "period": "2025 - Present",
+        "bullets": [
+          "Built an end-to-end attendance and payroll automation system deployed across multiple client locations, eliminating manual attendance recording, automating payroll calculation, and enabling real-time monitoring of workers across all sites.",
+          "Developed a machine-learning-based soil classification system to help determine optimal land use, delivered as part of a full-stack solution for an agriculture-focused client.",
+          "Reduced client dependency on manual processes by independently architecting and shipping production-ready agent logic and LLM API integrations, iterating based on direct client feedback as the sole developer on each engagement."
+        ]
+      },
+      {
+        "company": "Information Technology Institute (ITI), Menofia Branch, Egypt",
+        "role": "Power BI Development Intern",
+        "period": "Jan 2026 - Jun 2026",
+        "bullets": [
+          "Delivered 10 Power BI reports and built 3 data warehouses (DWH), performing data cleaning, manipulation, and problem-solving to transform raw source data into clean, model-ready datasets.",
+          "Prototyped deep learning forecasting models in PyTorch on top of the cleaned datasets to support data-driven planning."
+        ]
+      }
     ],
-    "projects":[
-      {"name":"Handwritten Digit Recognition (CNN)","tech":"Python, TensorFlow/PyTorch, Computer Vision","links":"GitHub: github.com/Mohamed-Elmasry16/Digit_Recogntion","bullets":[
-        "Built and trained a Convolutional Neural Network (CNN) for handwritten digit classification on the MNIST dataset, achieving 97.16% test accuracy (test MSE of 0.252)."
-      ]},
-      {"name":"ECHO Virtual Assistant - Vision-Based Virtual Mouse & Keyboard","tech":"Python, OpenCV, Computer Vision, NLP","links":"Graduation Project - rated Excellent","bullets":[
-        "Built a real-time hand-tracking system with OpenCV that detects hand landmarks and gestures via webcam, translating hand movement into cursor control and keystrokes for a fully touchless virtual mouse and keyboard.",
-        "Combined the computer vision input layer with an NLP-based conversational assistant to deliver a multimodal virtual assistant, integrating vision and language processing in a single graduation project."
-      ]},
-      {"name":"Telecom Churn Analysis & Prediction","tech":"Python, Pandas, Scikit-learn, XGBoost, Streamlit","links":"GitHub: github.com/Mohamed-Elmasry16/Telecom-churn-project","bullets":[
-        "Performed EDA, data cleaning, and feature engineering on customer telecom data, then built and benchmarked a supervised XGBoost model, tuning with SMOTE and GridSearchCV to correct class imbalance and achieve approximately 80% recall.",
-        "Deployed a real-time interactive ML application with Streamlit, layering a natural-language chat interface (Qwen2.5-1.5B) on top of the model for non-technical users."
-      ]},
-      {"name":"Recovera - Multi-Agent AI and BI Copilot","tech":"Python, SQL, PostgreSQL, FastAPI, LangChain, Docker","links":"Live Demo: recovera-copilot.vercel.app | GitHub: github.com/Mohamed-Elmasry16/Recovera-Copilot-","bullets":[
-        "Enabled non-technical users to query business data safely by architecting a 5-stage multi-agent orchestration pipeline (planner, SQL generator, validator, executor, analytics interpreter) that converted natural-language questions into validated analytics output, backed by a local Retrieval-Augmented Generation (RAG) layer with PostgreSQL + pgvector embeddings.",
-        "Wrote efficient, validated SQL to extract and aggregate data from a PostgreSQL + pgvector schema, with a code-layer SQL validator (sqlglot + policy engine) to keep agent-generated queries safe at scale."
-      ]}
+    "projects": [
+      {
+        "name": "Handwritten Digit Recognition (CNN)",
+        "tech": "Python, TensorFlow/PyTorch, Computer Vision",
+        "links": "GitHub: github.com/Mohamed-Elmasry16/Digit_Recogntion",
+        "bullets": [
+          "Built and trained a Convolutional Neural Network (CNN) for handwritten digit classification on the MNIST dataset, achieving 97.16% test accuracy (test MSE of 0.252)."
+        ]
+      },
+      {
+        "name": "ECHO Virtual Assistant - Vision-Based Virtual Mouse & Keyboard",
+        "tech": "Python, OpenCV, Computer Vision, NLP",
+        "links": "Graduation Project - rated Excellent",
+        "bullets": [
+          "Built a real-time hand-tracking system with OpenCV that detects hand landmarks and gestures via webcam, translating hand movement into cursor control and keystrokes for a fully touchless virtual mouse and keyboard.",
+          "Combined the computer vision input layer with an NLP-based conversational assistant to deliver a multimodal virtual assistant, integrating vision and language processing in a single graduation project."
+        ]
+      },
+      {
+        "name": "Telecom Churn Analysis & Prediction",
+        "tech": "Python, Pandas, Scikit-learn, XGBoost, Streamlit",
+        "links": "GitHub: github.com/Mohamed-Elmasry16/Telecom-churn-project",
+        "bullets": [
+          "Performed EDA, data cleaning, and feature engineering on customer telecom data, then built and benchmarked a supervised XGBoost model, tuning with SMOTE and GridSearchCV to correct class imbalance and achieve approximately 80% recall.",
+          "Deployed a real-time interactive ML application with Streamlit, layering a natural-language chat interface (Qwen2.5-1.5B) on top of the model for non-technical users."
+        ]
+      },
+      {
+        "name": "Recovera - Multi-Agent AI and BI Copilot",
+        "tech": "Python, SQL, PostgreSQL, FastAPI, LangChain, Docker",
+        "links": "Live Demo: recovera-copilot.vercel.app | GitHub: github.com/Mohamed-Elmasry16/Recovera-Copilot-",
+        "bullets": [
+          "Enabled non-technical users to query business data safely by architecting a 5-stage multi-agent orchestration pipeline (planner, SQL generator, validator, executor, analytics interpreter) that converted natural-language questions into validated analytics output, backed by a local Retrieval-Augmented Generation (RAG) layer with PostgreSQL + pgvector embeddings.",
+          "Wrote efficient, validated SQL to extract and aggregate data from a PostgreSQL + pgvector schema, with a code-layer SQL validator (sqlglot + policy engine) to keep agent-generated queries safe at scale."
+        ]
+      },
+      {
+        "name": "Machine Learning From Scratch",
+        "tech": "Python, Machine Learning, Neural Networks",
+        "links": "GitHub: https://github.com/Mohamed-Elmasry16/machine_learning_from_scratch",
+        "bullets": [
+          "Implemented machine learning work from scratch, including neural-network and regression exercises, to strengthen first-principles understanding of model training and core ML concepts."
+        ]
+      }
     ],
-    "skills_categories":{
-      "Python for Data Science":["Python","Pandas","NumPy","Scikit-learn","Matplotlib","SQL"],
-      "ML & Deep Learning":["Supervised & Unsupervised ML","Model Evaluation & Benchmarking","PyTorch","TensorFlow","CNNs","Transformer Architectures (built GPT-2 from scratch: self-attention, tokenization)","XGBoost"],
-      "Computer Vision":["OpenCV","Real-Time Hand/Gesture Tracking","Image Classification (CNNs)"],
-      "Generative AI & RAG":["Large Language Models (LLMs)","Retrieval-Augmented Generation (RAG)","Prompt Engineering","Tokenization & Embeddings","Natural Language Processing (NLP)"],
-      "Data Preprocessing":["Exploratory Data Analysis (EDA)","Data Cleaning","Feature Engineering","Handling Imbalanced Data (SMOTE)"],
-      "App Deployment":["Streamlit","FastAPI","REST APIs","Real-Time Interactive ML Applications"],
-      "Agentic AI":["Multi-Agent Orchestration","Autonomous Tool Calling","Agent Architecture Design"],
-      "LLM API Integration":["OpenRouter","Groq","Hugging Face Inference","LangChain","LangSmith (Observability)"],
-      "Databases":["SQL","PostgreSQL","ChromaDB","pgvector (Vector Databases)"],
-      "Deployment & Tools":["Docker","Vercel","Hugging Face Spaces","Git","GitHub"],
-      "Soft Skills":["Analytical Problem-Solving","Cross-Functional Collaboration","Clear Technical Communication","Adaptability","Independent Ownership & Delivery"]
+    "skills_categories": {
+      "Python for Data Science": [
+        "Python",
+        "Pandas",
+        "NumPy",
+        "Scikit-learn",
+        "Matplotlib",
+        "SQL"
+      ],
+      "ML & Deep Learning": [
+        "Supervised & Unsupervised ML",
+        "Model Evaluation & Benchmarking",
+        "PyTorch",
+        "TensorFlow",
+        "CNNs",
+        "Transformer Architectures (built GPT-2 from scratch: self-attention, tokenization)",
+        "XGBoost"
+      ],
+      "Computer Vision": [
+        "OpenCV",
+        "Real-Time Hand/Gesture Tracking",
+        "Image Classification (CNNs)"
+      ],
+      "Generative AI & RAG": [
+        "Large Language Models (LLMs)",
+        "Retrieval-Augmented Generation (RAG)",
+        "Prompt Engineering",
+        "Tokenization & Embeddings",
+        "Natural Language Processing (NLP)"
+      ],
+      "Data Preprocessing": [
+        "Exploratory Data Analysis (EDA)",
+        "Data Cleaning",
+        "Feature Engineering",
+        "Handling Imbalanced Data (SMOTE)"
+      ],
+      "App Deployment": [
+        "Streamlit",
+        "FastAPI",
+        "REST APIs",
+        "Real-Time Interactive ML Applications"
+      ],
+      "Agentic AI": [
+        "Multi-Agent Orchestration",
+        "Autonomous Tool Calling",
+        "Agent Architecture Design"
+      ],
+      "LLM API Integration": [
+        "OpenRouter",
+        "Groq",
+        "Hugging Face Inference",
+        "LangChain",
+        "LangSmith (Observability)"
+      ],
+      "Databases": [
+        "SQL",
+        "PostgreSQL",
+        "ChromaDB",
+        "pgvector (Vector Databases)"
+      ],
+      "Deployment & Tools": [
+        "Docker",
+        "Vercel",
+        "Hugging Face Spaces",
+        "Git",
+        "GitHub"
+      ],
+      "Soft Skills": [
+        "Analytical Problem-Solving",
+        "Cross-Functional Collaboration",
+        "Clear Technical Communication",
+        "Adaptability",
+        "Independent Ownership & Delivery"
+      ]
     },
-    "education":["Bachelor of Science, Computer Science - Very Good - El Shorouk Academy, Cairo, Egypt (Sep 2019 - Aug 2023)","Graduation Project: ECHO Virtual Assistant - rated Excellent"],
-    "certifications":["Machine Learning & AI: Mathematics for ML and Data Science Specialization, Supervised Machine Learning, Advanced Learning Algorithms (DeepLearning.AI), Practical ML for Data Science, Generative AI (ITI MaharaTech)","Data & SQL: DataCamp Associate Data Analyst, Associate Data Engineer in SQL, SQL Associate, Python Data Associate; IBM Databases and SQL for Data Science with Python (with Honors); HackerRank SQL & Python (Basic)","Data Science Foundations (IBM/Coursera): Python for Data Science AI and Development, Python Project for Data Science, Tools for Data Science, What is Data Science; ITI Mahara-Tech Python Programming Basics"],
-    "training":["Deloitte Australia - Virtual Data Analyst Job Simulation (via Forage), Jul 2025 - Present: applied Python and statistical analysis to derive insights from client datasets, including stakeholder mapping and data preprocessing."],
-    "languages":["Arabic (Native)","English (Proficient)"],
-    "additional_information":"Military Service: Completed mandatory military duty."
+    "education": [
+      "Bachelor of Science, Computer Science - Very Good - El Shorouk Academy, Cairo, Egypt (Sep 2019 - Aug 2023)",
+      "Graduation Project: ECHO Virtual Assistant - rated Excellent"
+    ],
+    "certifications": [
+      "Machine Learning & AI: Mathematics for ML and Data Science Specialization, Supervised Machine Learning, Advanced Learning Algorithms (DeepLearning.AI), Practical ML for Data Science, Generative AI (ITI MaharaTech)",
+      "Data & SQL: DataCamp Associate Data Analyst, Associate Data Engineer in SQL, SQL Associate, Python Data Associate; IBM Databases and SQL for Data Science with Python (with Honors); HackerRank SQL & Python (Basic)",
+      "Data Science Foundations (IBM/Coursera): Python for Data Science AI and Development, Python Project for Data Science, Tools for Data Science, What is Data Science; ITI Mahara-Tech Python Programming Basics"
+    ],
+    "training": [
+      "Deloitte Australia - Virtual Data Analyst Job Simulation (via Forage), Jul 2025 - Present: applied Python and statistical analysis to derive insights from client datasets, including stakeholder mapping and data preprocessing."
+    ],
+    "languages": [
+      "Arabic (Native)",
+      "English (Proficient)"
+    ],
+    "additional_information": "Military Service: Completed mandatory military duty."
   }
 }
