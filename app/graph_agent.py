@@ -463,20 +463,30 @@ async def build_application(
                 if len(ordered) >= 5:
                     break
 
-        return ordered[:5]
+        canonical_projects = ordered[:5]
+        # Never silently fill missing project slots with arbitrary baseline
+        # projects. If the model did not supply five valid choices for a
+        # baseline that has five or more projects, stop and make it retry.
+        # This prevents truncated tool output from producing a bad CV.
+        if len(variant_projects) >= 5 and len(canonical_projects) < 5:
+            raise ValueError(
+                "Project selection was incomplete: provide exactly five valid "
+                "projects from the selected baseline, ranked by full-job relevance."
+            )
+        return canonical_projects
 
     def _clean_email_body(text: str) -> str:
         """Normalize the LLM draft into clean plain-text application email."""
-        text = str(text or "").replace("\\r\\n", "\\n").replace("\\r", "\\n")
-        text = text.replace("\\u00a0", " ")
-        text = re.sub(r"\\\\?\\*\\*(.*?)\\\\?\\*\\*", r"\\1", text)
-        text = re.sub(r"(?m)^\\s*#{1,6}\\s*", "", text)
-        text = re.sub(r"(?m)^\\s*[-*+]\\s+", "", text)
-        text = text.replace("\\**", "").replace("**", "")
-        text = re.sub(r"\\\\([*#_\\[\\]()])", r"\\1", text)
-        paragraphs = [re.sub(r"[ \\t]+", " ", p).strip() for p in re.split(r"\\n\\s*\\n+", text)]
+        text = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
+        text = text.replace("\u00a0", " ")
+        text = re.sub(r"\\?\*\*(.*?)\\?\*\*", r"\1", text)
+        text = re.sub(r"(?m)^\s*#{1,6}\s*", "", text)
+        text = re.sub(r"(?m)^\s*[-*+]\s+", "", text)
+        text = text.replace("\**", "").replace("**", "")
+        text = re.sub(r"\\([*#_\[\]()])", r"\1", text)
+        paragraphs = [re.sub(r"[ \t]+", " ", p).strip() for p in re.split(r"\n\s*\n+", text)]
         paragraphs = [p for p in paragraphs if p]
-        return "\\n\\n".join(paragraphs).strip()
+        return "\n\n".join(paragraphs).strip()
 
     def _canonical_certifications(items: Optional[List[str]]) -> List[str]:
         requested = [_norm(x) for x in (items or [])]
