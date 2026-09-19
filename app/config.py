@@ -132,14 +132,11 @@ TELEGRAM_ALLOWED_USER_IDS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Email (SMTP)
+# Email (Resend HTTPS API)
 # ---------------------------------------------------------------------------
 
-SMTP_HOST = _env("SMTP_HOST", "smtp.gmail.com")
-SMTP_PORT = _env_int("SMTP_PORT", 587)
-SMTP_USER = _env("SMTP_USER")
-SMTP_PASS = _env("SMTP_PASS")
-SENDER_EMAIL = _env("SENDER_EMAIL") or SMTP_USER
+RESEND_API_KEY = _env("RESEND_API_KEY")
+SENDER_EMAIL = _env("SENDER_EMAIL")
 SENDER_NAME = _env("SENDER_NAME")
 
 # ---------------------------------------------------------------------------
@@ -197,8 +194,10 @@ def startup_report() -> list:
         problems.append(f"WARN: {note}")
     if not PROFILE_PATH.exists():
         problems.append(f"WARN: no profile at {PROFILE_PATH} — run /profile in the bot to set one up.")
-    if not (SMTP_USER and SMTP_PASS):
-        problems.append("WARN: SMTP_USER/SMTP_PASS not set — drafting works, sending will fail.")
+    if not RESEND_API_KEY:
+        problems.append("WARN: RESEND_API_KEY not set — drafting works, sending will fail.")
+    if not SENDER_EMAIL:
+        problems.append("WARN: SENDER_EMAIL not set — configure a verified Resend sender address.")
     if not TELEGRAM_ALLOWED_USER_IDS:
         problems.append(
             "WARN: TELEGRAM_ALLOWED_USER_ID is empty — ANYONE who finds your bot can use "
