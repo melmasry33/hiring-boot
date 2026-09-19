@@ -319,20 +319,101 @@ async def build_application(
 
     user_id = state["user_id"]
     profile = store.load_profile()
+
+    # The model is allowed to choose and reorder content, but the PDF must be
+    # grounded in the canonical profile. This prevents accidental rewrites of
+    # job titles, dates, project names or technical claims from becoming CV facts.
+    def _norm(value: Any) -> str:
+        return re.sub(r"\\s+", " ", str(value or "").strip().lower())
+
+    profile_experience = profile.get("experience") or []
+    profile_projects = profile.get("projects") or []
+    profile_certs = profile.get("certifications") or []
+
+    def _canonical_experience(items: List[dict]) -> List[dict]:
+        chosen: List[dict] = []
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            role = _norm(item.get("role"))
+            company = _norm(item.get("company"))
+            match = next(
+                (
+                    src for src in profile_experience
+                    if _norm(src.get("role")) == role
+                    or (company and _norm(src.get("company")) == company and role in _norm(src.get("role")))
+                ),
+                None,
+            )
+            if match and match not in chosen:
+                chosen.append(match)
+        for src in profile_experience:
+            if src not in chosen:
+                chosen.append(src)
+            if len(chosen) >= 2:
+                break
+        return chosen[:3]
+
+    def _canonical_projects(items: List[dict]) -> List[dict]:
+        chosen: List[dict] = []
+        for item in items or []:
+            if not isinstance(item, dict):
+                continue
+            name = _norm(item.get("name"))
+            match = next((src for src in profile_projects if _norm(src.get("name")) == name), None)
+            if match and match not in chosen:
+                chosen.append(match)
+        for src in profile_projects:
+            if src not in chosen:
+                chosen.append(src)
+            if len(chosen) >= 4:
+                break
+        return chosen[:5]
+
+    def _canonical_certifications(items: Optional[List[str]]) -> List[str]:
+        chosen: List[str] = []
+        for item in items or []:
+            text = _norm(item)
+            match = next((src for src in profile_certs if _norm(src) == text), None)
+            if match and match not in chosen:
+                chosen.append(match)
+        for src in profile_certs:
+            if src not in chosen:
+                chosen.append(src)
+            if len(chosen) >= 6:
+                break
+        return chosen[:7]
+
+    # Reorder the profile's skill categories according to the model's requested
+    # order, but always use the canonical skill names from the profile.
+    profile_skill_categories = profile.get("skills_categories") or {}
+    ordered_skill_categories: Dict[str, List[str]] = {}
+    for key in (skills_categories or {}).keys():
+        if key in profile_skill_categories and key not in ordered_skill_categories:
+            ordered_skill_categories[key] = list(profile_skill_categories[key])
+    for key, values in profile_skill_categories.items():
+        if key not in ordered_skill_categories:
+            ordered_skill_categories[key] = list(values)
+        if len(ordered_skill_categories) >= 8:
+            break
+
     cv_data = {
         "name": profile.get("name", ""),
-        "headline": headline or profile.get("headline", ""),
-        "summary": summary or profile.get("summary", ""),
+        "headline": (headline or profile.get("headline", "")).strip(),
+        "summary": (summary or profile.get("summary", "")).strip(),
         "location": profile.get("location", ""),
         "phone": profile.get("phone", ""),
         "email": profile.get("email", ""),
         "linkedin": profile.get("linkedin", ""),
         "github": profile.get("github", ""),
-        "experience": selected_experience or profile.get("experience", []),
-        "projects": selected_projects or profile.get("projects", []),
+        "datacamp": profile.get("datacamp", ""),
+        "experience": _canonical_experience(selected_experience),
+        "projects": _canonical_projects(selected_projects),
         "education": profile.get("education", []),
-        "certifications": selected_certifications or profile.get("certifications", []),
-        "skills_categories": skills_categories or profile.get("skills_categories", {}),
+        "certifications": _canonical_certifications(selected_certifications),
+        "languages": profile.get("languages", []),
+        "military_service": profile.get("military_service", ""),
+        "skills_categories": ordered_skill_categories,
     }
     safe = "".join(c if c.isalnum() else "_" for c in f"{profile.get('name','CV')}_{company}")[:60]
     pdf_path = cv_generator.generate_pdf_cv(cv_data, filename=f"{safe}.pdf")
