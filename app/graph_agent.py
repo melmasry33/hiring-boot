@@ -303,11 +303,14 @@ async def build_application(
     headline: max 60 characters, a professional headline for the CV header
         (e.g. 'Data Engineer - Python, SQL, AI Systems'). NOT the company name.
     summary: 3-4 sentences, built only from real profile facts.
-    selected_experience: experience entries from the real profile, in display
-        order. Reword bullets for emphasis but never invent achievements.
-    selected_projects: only the projects actually relevant to this job.
-    skills_categories: profile skill categories, reordered so job-relevant
-        ones lead.
+    selected_experience: ALL experience entries from the real profile, in the
+        requested display order. Rewrite the existing bullets to emphasize the
+        job, but preserve the number of bullets and never invent achievements.
+    selected_projects: ALL profile projects, in the requested display order.
+        Rewrite existing bullets for job relevance, but do not remove projects
+        or invent facts.
+    skills_categories: ALL profile skill categories, reordered so job-relevant
+        ones lead; never remove a category or skill.
     email_subject: max 80 characters.
     email_body: application email referencing the SAME projects as the CV.
     recruiter_email: leave empty if genuinely unknown.
@@ -321,18 +324,28 @@ async def build_application(
     user_id = state["user_id"]
     profile = store.load_profile()
 
-    # The model is allowed to choose and reorder content, but the PDF must be
-    # grounded in the canonical profile. This prevents accidental rewrites of
-    # job titles, dates, project names or technical claims from becoming CV facts.
+    # The model may tailor wording and reorder content, but the canonical
+    # resume is never shortened. Every experience, project, certification and
+    # profile section remains present in the generated CV.
     def _norm(value: Any) -> str:
-        return re.sub(r"\\s+", " ", str(value or "").strip().lower())
+        return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
     profile_experience = profile.get("experience") or []
     profile_projects = profile.get("projects") or []
     profile_certs = profile.get("certifications") or []
 
+    def _merge_bullets(source: dict, drafted: dict) -> List[str]:
+        original = list(source.get("bullets") or [])
+        proposed = [str(x).strip() for x in (drafted.get("bullets") or []) if str(x).strip()]
+        # Tailor existing paragraphs, but never delete one or create extra ones.
+        merged = []
+        for i, original_text in enumerate(original):
+            merged.append(proposed[i] if i < len(proposed) else original_text)
+        return merged
+
     def _canonical_experience(items: List[dict]) -> List[dict]:
-        chosen: List[dict] = []
+        ordered: List[dict] = []
+        used = set()
         for item in items or []:
             if not isinstance(item, dict):
                 continue
@@ -340,53 +353,69 @@ async def build_application(
             company = _norm(item.get("company"))
             match = next(
                 (
-                    src for src in profile_experience
-                    if _norm(src.get("role")) == role
-                    or (company and _norm(src.get("company")) == company and role in _norm(src.get("role")))
+                    src for idx, src in enumerate(profile_experience)
+                    if idx not in used and (
+                        _norm(src.get("role")) == role
+                        or (
+                            company
+                            and _norm(src.get("company")) == company
+                            and role in _norm(src.get("role"))
+                        )
+                    )
                 ),
                 None,
             )
-            if match and match not in chosen:
-                chosen.append(match)
-        for src in profile_experience:
-            if src not in chosen:
-                chosen.append(src)
-            if len(chosen) >= 2:
-                break
-        return chosen[:3]
+            if match is not None:
+                idx = profile_experience.index(match)
+                used.add(idx)
+                merged = dict(match)
+                merged["bullets"] = _merge_bullets(match, item)
+                ordered.append(merged)
+
+        for idx, src in enumerate(profile_experience):
+            if idx not in used:
+                ordered.append(dict(src))
+        return ordered
 
     def _canonical_projects(items: List[dict]) -> List[dict]:
-        chosen: List[dict] = []
+        ordered: List[dict] = []
+        used = set()
         for item in items or []:
             if not isinstance(item, dict):
                 continue
             name = _norm(item.get("name"))
-            match = next((src for src in profile_projects if _norm(src.get("name")) == name), None)
-            if match and match not in chosen:
-                chosen.append(match)
-        for src in profile_projects:
-            if src not in chosen:
-                chosen.append(src)
-            if len(chosen) >= 4:
-                break
-        return chosen[:5]
+            match = next(
+                (src for idx, src in enumerate(profile_projects) if idx not in used and _norm(src.get("name")) == name),
+                None,
+            )
+            if match is not None:
+                idx = profile_projects.index(match)
+                used.add(idx)
+                merged = dict(match)
+                merged["bullets"] = _merge_bullets(match, item)
+                ordered.append(merged)
+
+        for idx, src in enumerate(profile_projects):
+            if idx not in used:
+                ordered.append(dict(src))
+        return ordered
 
     def _canonical_certifications(items: Optional[List[str]]) -> List[str]:
-        chosen: List[str] = []
-        for item in items or []:
-            text = _norm(item)
-            match = next((src for src in profile_certs if _norm(src) == text), None)
-            if match and match not in chosen:
-                chosen.append(match)
-        for src in profile_certs:
-            if src not in chosen:
-                chosen.append(src)
-            if len(chosen) >= 6:
-                break
-        return chosen[:7]
+        requested = [_norm(x) for x in (items or [])]
+        ordered: List[str] = []
+        used = set()
+        for wanted in requested:
+            for idx, src in enumerate(profile_certs):
+                if idx not in used and _norm(src) == wanted:
+                    ordered.append(src)
+                    used.add(idx)
+                    break
+        # Never delete certifications; requested order only affects prominence.
+        ordered.extend(src for idx, src in enumerate(profile_certs) if idx not in used)
+        return ordered
 
-    # Reorder the profile's skill categories according to the model's requested
-    # order, but always use the canonical skill names from the profile.
+    # Reorder categories according to the model's requested order, but retain
+    # every canonical category and every skill inside those categories.
     profile_skill_categories = profile.get("skills_categories") or {}
     ordered_skill_categories: Dict[str, List[str]] = {}
     for key in (skills_categories or {}).keys():
@@ -395,8 +424,6 @@ async def build_application(
     for key, values in profile_skill_categories.items():
         if key not in ordered_skill_categories:
             ordered_skill_categories[key] = list(values)
-        if len(ordered_skill_categories) >= 8:
-            break
 
     cv_data = {
         "name": profile.get("name", ""),
