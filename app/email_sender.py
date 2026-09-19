@@ -1,21 +1,56 @@
 """
-Resend HTTP delivery.
+Gmail API delivery over HTTPS.
 
-Uses Resend's HTTPS API instead of SMTP so delivery does not depend on outbound
-mail ports. The public interface remains unchanged for the rest of the agent.
+Uses Gmail's REST API instead of SMTP/Resend. The authenticated Gmail account
+is the sender. The public send_application_email(...) interface stays unchanged.
 """
 
 import asyncio
 import base64
 import os
+from email import encoders
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import formataddr
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-import httpx
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
-from config import RESEND_API_KEY, SENDER_EMAIL, SENDER_NAME, logger
+from config import (
+    GMAIL_CLIENT_ID,
+    GMAIL_CLIENT_SECRET,
+    GMAIL_REFRESH_TOKEN,
+    GMAIL_TOKEN_URI,
+    SENDER_EMAIL,
+    SENDER_NAME,
+    logger,
+)
 
-RESEND_URL = "https://api.resend.com/emails"
+GMAIL_SEND_SCOPE = "https://www.googleapis.com/auth/gmail.send"
+
+
+def _build_gmail_service():
+    if not (GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN):
+        raise RuntimeError(
+            "Gmail OAuth is not configured. Set GMAIL_CLIENT_ID, "
+            "GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN."
+        )
+
+    credentials = Credentials(
+        token=None,
+        refresh_token=GMAIL_REFRESH_TOKEN,
+        token_uri=GMAIL_TOKEN_URI,
+        client_id=GMAIL_CLIENT_ID,
+        client_secret=GMAIL_CLIENT_SECRET,
+        scopes=[GMAIL_SEND_SCOPE],
+    )
+    credentials.refresh(Request())
+    return build("gmail", "v1", credentials=credentials, cache_discovery=False)
 
 
 def _send_sync(
@@ -25,63 +60,55 @@ def _send_sync(
     cv_file_path: Optional[str],
     reply_to: Optional[str],
 ) -> Dict[str, Any]:
-    sender = SENDER_EMAIL.strip()
+    service = _build_gmail_service()
+
+    profile = service.users().getProfile(userId="me").execute()
+    account_email = (profile.get("emailAddress") or "").strip()
+    sender = (SENDER_EMAIL or account_email).strip()
     if not sender:
-        raise RuntimeError("SENDER_EMAIL is not configured.")
+        raise RuntimeError("Gmail account email could not be determined.")
 
-    from_value = f"{SENDER_NAME} <{sender}>" if SENDER_NAME else sender
-
-    payload: Dict[str, Any] = {
-        "from": from_value,
-        "to": [recipient_email],
-        "subject": subject,
-        "text": body,
-    }
-
+    msg = MIMEMultipart()
+    from_addr = formataddr((SENDER_NAME, sender)) if SENDER_NAME else sender
+    msg["From"] = from_addr
+    msg["To"] = recipient_email
+    msg["Subject"] = subject
     if reply_to:
-        payload["reply_to"] = [reply_to]
+        msg["Reply-To"] = reply_to
+
+    msg.attach(MIMEText(body, "plain", "utf-8"))
 
     if cv_file_path and os.path.exists(cv_file_path):
         file_path = Path(cv_file_path)
-        payload["attachments"] = [
-            {
-                "filename": file_path.name,
-                "content": base64.b64encode(file_path.read_bytes()).decode("ascii"),
-            }
-        ]
+        with file_path.open("rb") as fh:
+            part = MIMEBase("application", "pdf")
+            part.set_payload(fh.read())
+        encoders.encode_base64(part)
+        part.add_header(
+            "Content-Disposition",
+            f'attachment; filename="{file_path.name}"',
+        )
+        msg.attach(part)
         logger.info("Attached CV: %s", file_path.name)
 
-    logger.info("Sending email to %s through Resend HTTPS API ...", recipient_email)
+    raw = base64.urlsafe_b64encode(msg.as_bytes()).decode("ascii")
+    result = (
+        service.users()
+        .messages()
+        .send(userId="me", body={"raw": raw})
+        .execute()
+    )
 
-    with httpx.Client(timeout=30.0) as client:
-        response = client.post(
-            RESEND_URL,
-            headers={
-                "Authorization": f"Bearer {RESEND_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-        )
-
-    if response.is_success:
-        data = response.json()
-        email_id = data.get("id")
-        return {
-            "success": True,
-            "status": "SENT",
-            "message": f"Application email sent to {recipient_email}.",
-            "recipient": recipient_email,
-            "subject": subject,
-            "id": email_id,
-        }
-
-    try:
-        error_payload = response.json()
-        detail = error_payload.get("message") or error_payload.get("name") or str(error_payload)
-    except ValueError:
-        detail = response.text.strip() or response.reason_phrase
-
-    raise RuntimeError(f"Resend API returned HTTP {response.status_code}: {detail}")
+    return {
+        "success": True,
+        "status": "SENT",
+        "message": f"Application email sent to {recipient_email}.",
+        "recipient": recipient_email,
+        "subject": subject,
+        "id": result.get("id"),
+        "thread_id": result.get("threadId"),
+        "sender": sender,
+    }
 
 
 async def send_application_email(
@@ -106,30 +133,27 @@ async def send_application_email(
             "message": f"Invalid recipient address: '{recipient_email}'",
         }
 
-    if not RESEND_API_KEY:
+    if not (GMAIL_CLIENT_ID and GMAIL_CLIENT_SECRET and GMAIL_REFRESH_TOKEN):
         return {
             "success": False,
-            "status": "RESEND_NOT_CONFIGURED",
-            "message": "RESEND_API_KEY is not set in Railway.",
-        }
-
-    if not SENDER_EMAIL:
-        return {
-            "success": False,
-            "status": "SENDER_NOT_CONFIGURED",
-            "message": "SENDER_EMAIL is not set. Configure a verified Resend sender address.",
+            "status": "GMAIL_NOT_CONFIGURED",
+            "message": (
+                "Gmail API is not configured. Set GMAIL_CLIENT_ID, "
+                "GMAIL_CLIENT_SECRET, and GMAIL_REFRESH_TOKEN in Railway."
+            ),
         }
 
     try:
         return await asyncio.to_thread(
             _send_sync, recipient_email, subject, body, cv_file_path, reply_to
         )
-    except httpx.HTTPError as e:
-        logger.error("Resend HTTP request failed: %s", e)
+    except HttpError as e:
+        detail = str(e)
+        logger.error("Gmail API send failed: %s", detail)
         return {
             "success": False,
-            "status": "HTTP_ERROR",
-            "message": f"Resend HTTP request failed: {e}",
+            "status": "GMAIL_API_ERROR",
+            "message": f"Gmail API rejected the send: {detail}",
         }
     except Exception as e:
         logger.error("Email send failed: %s", e)
