@@ -86,7 +86,7 @@ _RAW_LLM_BASE_URL = (
 # endpoint is Groq or NVIDIA. This prevents an older generic LLM_API_KEY from
 # shadowing the provider key in Railway.
 if "openrouter" in _RAW_LLM_BASE_URL.lower():
-    LLM_API_KEY = _env("OPENROUTER_API_KEY") or _env("LLM_API_KEY") or _env("GROQ_API_KEY") or _env("NVIDIA_API_KEY")
+    LLM_API_KEY = _env("OPENROUTER_API_KEY") or _env("LLM_API_KEY")
 elif "groq" in _RAW_LLM_BASE_URL.lower():
     LLM_API_KEY = _env("GROQ_API_KEY") or _env("LLM_API_KEY") or _env("NVIDIA_API_KEY")
 elif "nvidia" in _RAW_LLM_BASE_URL.lower():
