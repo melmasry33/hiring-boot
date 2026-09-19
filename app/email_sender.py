@@ -62,11 +62,12 @@ def _send_sync(
 ) -> Dict[str, Any]:
     service = _build_gmail_service()
 
-    profile = service.users().getProfile(userId="me").execute()
-    account_email = (profile.get("emailAddress") or "").strip()
-    sender = (SENDER_EMAIL or account_email).strip()
+    # The gmail.send scope is intentionally the only Gmail permission we request.
+    # Do not call users.getProfile() here: that endpoint requires additional
+    # mailbox/profile scopes and causes 403 insufficientPermissions with gmail.send.
+    sender = (SENDER_EMAIL or "").strip()
     if not sender:
-        raise RuntimeError("Gmail account email could not be determined.")
+        raise RuntimeError("SENDER_EMAIL is required for Gmail API sending.")
 
     msg = MIMEMultipart()
     from_addr = formataddr((SENDER_NAME, sender)) if SENDER_NAME else sender
