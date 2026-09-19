@@ -465,22 +465,15 @@ async def build_application(
 
         return ordered[:5]
 
-        def _clean_email_body(text: str) -> str:
-        """Normalize the LLM draft into a clean plain-text application email.
-
-        The email is sent as plain text. Remove Markdown artifacts and the
-        common formatting noise that makes generated outreach look machine
-        written, while preserving the wording and claims themselves.
-        """
+    def _clean_email_body(text: str) -> str:
+        """Normalize the LLM draft into clean plain-text application email."""
         text = str(text or "").replace("\\r\\n", "\\n").replace("\\r", "\\n")
         text = text.replace("\\u00a0", " ")
-        # Remove escaped/plain Markdown emphasis and heading syntax.
         text = re.sub(r"\\\\?\\*\\*(.*?)\\\\?\\*\\*", r"\\1", text)
         text = re.sub(r"(?m)^\\s*#{1,6}\\s*", "", text)
         text = re.sub(r"(?m)^\\s*[-*+]\\s+", "", text)
         text = text.replace("\\**", "").replace("**", "")
         text = re.sub(r"\\\\([*#_\\[\\]()])", r"\\1", text)
-        # Collapse excessive blank space without flattening paragraphs.
         paragraphs = [re.sub(r"[ \\t]+", " ", p).strip() for p in re.split(r"\\n\\s*\\n+", text)]
         paragraphs = [p for p in paragraphs if p]
         return "\\n\\n".join(paragraphs).strip()
