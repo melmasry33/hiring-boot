@@ -1,13 +1,13 @@
 {
   "name": "Mohamed Waleed Ezzat",
-  "headline": "AI/ML Engineer — Agentic AI & LLM Systems",
+  "headline": "AI/ML Engineer - Agentic AI & LLM Systems",
   "location": "Banha, Egypt",
   "phone": "+20 128 090 8922",
   "email": "mwezzat16@gmail.com",
-  "linkedin": "https://www.linkedin.com/in/mohamedwaleed-data",
+  "linkedin": "https://www.linkedin.com/in/mohamedwaleed-data/",
   "github": "https://github.com/Mohamed-Elmasry16",
-  "datacamp": "https://datacamp.com/portfolio/mowaleed",
-  "summary": "AI/ML Engineer focused on Agentic AI: multi-agent orchestration, autonomous tool-calling systems, and production LLM-powered copilots deployed via FastAPI. Built a multi-agent pipeline for Recovera (planner, SQL generator, validator, executor, analytics interpreter) and an autonomous assistant that selects between tools based on user intent and streams its reasoning in real time. Experienced across the model lifecycle — training, evaluation, and deployment — and comfortable integrating LLM APIs (OpenRouter, Groq, Hugging Face) into scalable, production systems.",
+  "datacamp": "https://www.datacamp.com/portfolio/mowaleed",
+  "summary": "Business-minded Computer Science graduate who bridges data, AI, and stakeholder needs. Built ETL pipelines and BI dashboards for business decisions during a Power BI internship, and independently shipped multiple AI applications, including a multi-agent BI copilot used to flag revenue leakage. Comfortable moving between technical execution and business communication, with hands-on exposure to LLMs, Agentic AI, and GenAI applied to real commercial problems. Eager to rotate across Product, Pre-Sales, and Delivery to see how Enterprise AI creates value end to end.",
   "target_roles": [
     "AI Engineer",
     "Agentic AI Engineer",
@@ -20,173 +20,185 @@
   ],
   "experience": [
     {
-      "role": "AI Developer — Freelance (Remote)",
+      "role": "AI Developer and SaaS Product Designer",
       "company": "Freelance",
-      "period": "2025 – Present",
+      "period": "2025 - Present",
       "bullets": [
-        "Delivered end-to-end AI-powered products for multiple clients without an in-house engineering team, by owning the full delivery cycle — requirements gathering, architecture selection, LLM integration, and deployment — across Python/FastAPI backends and React/Next.js frontends.",
-        "Reduced client dependency on manual processes by independently architecting and shipping production-ready agent logic and LLM API integrations, iterating based on direct client feedback as the sole developer on each engagement."
+        "Design and build AI-powered SaaS products for clients end to end, from product scoping and UX flow through backend architecture and AI integration, translating client business goals into shipped features.",
+        "Deliver full-stack AI applications (Python/FastAPI backends, React/Next.js frontends) as a solo freelancer, managing client communication, timelines, and iteration based on feedback."
       ]
     },
     {
       "role": "Power BI Development Intern",
-      "company": "Information Technology Institute (ITI), Menofia Branch, Egypt",
-      "period": "Jan 2026 – Jun 2026",
+      "company": "Information Technology Institute (ITI)",
+      "period": "Jan 2026 - Jun 2026",
       "bullets": [
-        "Improved data readiness for forecasting by building automated ETL pipelines (SQL, Power Query) that transformed raw source data into clean, model-ready datasets, then prototyped deep learning forecasting models in PyTorch on top of them."
+        "Built ETL pipelines and data models with SQL and Power Query, and prototyped deep learning forecasting models in PyTorch, translating raw data into interactive dashboards non-technical stakeholders used for decisions.",
+        "Wrote DAX and SQL calculations to ensure accuracy across KPI and sales-trend reporting presented to business stakeholders."
+      ]
+    },
+    {
+      "role": "Virtual Data Analyst",
+      "company": "Deloitte Australia - Job Simulation (via Forage)",
+      "period": "Jul 2025 - Present",
+      "bullets": [
+        "Completed a self-paced consulting simulation applying Python and statistical methods to derive actionable business insights from client data, including stakeholder mapping and dataset preprocessing."
       ]
     }
   ],
   "projects": [
     {
-      "name": "Vector — AI Personal Assistant (Agentic AI)",
+      "name": "Recovera - Multi-Agent AI and BI Copilot",
+      "tech": "Python, FastAPI, Next.js, PostgreSQL, LangChain, Docker",
+      "links": "Live Demo: recovera-copilot.vercel.app | GitHub: github.com/Mohamed-Elmasry16/Recovera-Copilot-",
+      "bullets": [
+        "Built a production AI system letting business users ask plain-language questions and get secure, business-ready analytics back, no SQL required, via a multi-agent pipeline (planner, SQL generator, validator, executor, analytics interpreter).",
+        "Applied unsupervised anomaly detection (Isolation Forest and Local Outlier Factor) across approximately 298,000 orders to flag revenue leakage, tying an AI technique directly to a measurable commercial outcome.",
+        "Designed a PostgreSQL and pgvector schema for retrieval-augmented generation, and added a code-layer SQL validator (sqlglot and policy engine) so AI-generated queries stay safe at business scale; deployed end to end (Hugging Face Spaces, Vercel) with LangSmith tracing."
+      ]
+    },
+    {
+      "name": "Vector - AI Personal Assistant",
       "tech": "Python, FastAPI, React, LangChain, PostgreSQL, Docker",
-      "links": "vector-ai-snowy.vercel.app | github.com/Mohamed-Elmasry16/langchain-projects",
+      "links": "Live Demo: vector-ai-snowy.vercel.app | GitHub: github.com/Mohamed-Elmasry16/langchain-projects",
       "bullets": [
-        "Increased task-completion flexibility by architecting an autonomous agent with custom tool-calling logic that dynamically selected among web search, document analysis, image generation, and utility tools based on user intent.",
-        "Improved user trust and transparency by streaming the agent's step-by-step reasoning in real time via Server-Sent Events (SSE), and sustained coherent long-context conversations through a custom hybrid conversational memory system."
-      ]
-    },
-    {
-      "name": "Recovera — Multi-Agent AI and BI Copilot",
-      "tech": "Python, FastAPI, PostgreSQL, LangChain, Docker",
-      "links": "recovera-copilot.vercel.app | github.com/Mohamed-Elmasry16/Recovera-Copilot-",
-      "bullets": [
-        "Enabled non-technical users to query business data safely by architecting a production multi-agent orchestration pipeline (planner, SQL generator, validator, executor, analytics interpreter) that converted natural-language questions into validated analytics output.",
-        "Improved retrieval relevance for retrieval-augmented generation (RAG) by integrating LLM APIs through the Hugging Face Transformers ecosystem for intelligent routing and semantic retrieval, backed by a PostgreSQL + pgvector embeddings schema.",
-        "Prevented unsafe or unauthorized query execution at scale by building a code-layer SQL validator (sqlglot + policy engine); deployed end-to-end (Hugging Face Spaces, Vercel) with LangSmith tracing for full multi-agent observability."
-      ]
-    },
-    {
-      "name": "GPT-2 Style Transformer from Scratch",
-      "tech": "Python, PyTorch, NLP",
-      "links": "github.com/Mohamed-Elmasry16/LLM-from-scratch",
-      "bullets": [
-        "Built first-principles understanding of the architecture underlying modern LLM agents by engineering a GPT-2-style transformer from scratch in PyTorch — implementing custom training loops, tokenization, embeddings, multi-head self-attention, and transformer blocks."
+        "Developed an autonomous agent that selects between web search, document analysis, and other tools based on user intent, streaming its reasoning transparently, supporting the kind of trust and explainability that matters when selling AI to enterprise clients."
       ]
     },
     {
       "name": "Advanced RAG Pipeline",
       "tech": "Python, LangChain, ChromaDB, Llama 3.3",
-      "links": "github.com/Mohamed-Elmasry16",
+      "links": "GitHub: github.com/Mohamed-Elmasry16 (link on request)",
       "bullets": [
-        "Reduced hallucination risk and improved answer traceability by designing an end-to-end RAG pipeline covering chunking, embeddings, semantic retrieval, and context-aware generation with source citations."
+        "Built an end-to-end retrieval-augmented generation pipeline with source citations and streaming responses, reducing hallucinations so business users can trust AI-generated answers, a key adoption barrier for Enterprise AI."
       ]
     },
     {
       "name": "Telecom Churn AI Assistant",
       "tech": "Python, FastAPI, Streamlit, XGBoost, Hugging Face",
-      "links": "github.com/Mohamed-Elmasry16/Telecom-churn-project",
+      "links": "GitHub: github.com/Mohamed-Elmasry16/Telecom_churn_project",
       "bullets": [
-        "Achieved ~80% recall on churn prediction (up from an imbalanced baseline) by training and tuning an XGBoost model with SMOTE and GridSearchCV, then made results accessible via a natural-language chat interface (Qwen2.5-1.5B) deployed with FastAPI/Streamlit."
+        "Paired an XGBoost churn-prediction model with a natural-language chat interface so business users could query customer-retention risk directly, tuned with SMOTE and GridSearchCV to approximately 80 percent recall, a telecom-relevant use case."
+      ]
+    },
+    {
+      "name": "GPT-2 Style Transformer from Scratch",
+      "tech": "Python, PyTorch, NLP",
+      "links": "GitHub: github.com/Mohamed-Elmasry16/LLM-from-scratch",
+      "bullets": [
+        "Engineered a transformer from scratch, including tokenizer, self-attention, and a full training/inference pipeline, to build first-principles understanding of the LLMs behind today's Agentic AI and GenAI products."
       ]
     }
   ],
   "skills_categories": {
-    "Agentic AI": [
-      "Multi-Agent Orchestration",
-      "Autonomous Tool Calling",
-      "Agent Architecture Design",
-      "Automation Pipelines"
+    "Business Intelligence and Analytics": [
+      "Power BI",
+      "DAX",
+      "Power Query",
+      "SQL",
+      "Data Modeling",
+      "KPI and Sales-Trend Reporting",
+      "Stakeholder Communication"
     ],
-    "Generative AI & LLMs": [
+    "AI Technologies": [
       "Large Language Models (LLMs)",
+      "Agentic AI",
+      "Generative AI (GenAI)",
       "Retrieval-Augmented Generation (RAG)",
-      "Prompt Engineering",
-      "Tokenization & Embeddings",
-      "NLP"
+      "Machine Learning",
+      "Prompt Engineering"
     ],
-    "ML Lifecycle": [
-      "Model Training",
-      "Model Evaluation",
-      "Model Deployment",
-      "Feature Engineering",
-      "Data Preprocessing"
-    ],
-    "Frameworks & Libraries": [
+    "AI Frameworks and ML": [
       "LangChain",
+      "Hugging Face Transformers",
       "PyTorch",
       "TensorFlow",
-      "Hugging Face Transformers",
       "Scikit-learn",
       "XGBoost"
     ],
-    "LLM API Integration & Observability": [
-      "OpenRouter",
-      "Groq",
-      "Hugging Face Inference",
-      "LangSmith (Observability)",
-      "Claude Skills and Connectors"
-    ],
-    "Programming & Backend": [
+    "Programming Languages": [
       "Python",
       "SQL",
-      "TypeScript",
+      "TypeScript"
+    ],
+    "Backend, Frontend and Databases": [
       "FastAPI",
       "REST APIs",
-      "Server-Sent Events (SSE)"
-    ],
-    "Databases & Storage": [
+      "React",
+      "Next.js",
       "PostgreSQL",
-      "Supabase",
-      "ChromaDB",
-      "pgvector (Vector Databases)"
+      "Supabase"
     ],
-    "Deployment & DevOps": [
+    "Deployment and Tools": [
       "Docker",
       "Vercel",
       "Hugging Face Spaces",
       "Git",
-      "GitHub"
+      "GitHub",
+      "Jupyter Notebook"
     ],
-    "BI & Data Analytics": [
-      "Power BI",
-      "Power Query",
-      "ETL Pipelines",
-      "Pandas",
-      "NumPy"
+    "Soft Skills": [
+      "Business Acumen and Analytical Mindset",
+      "Excellent Communication and Presentation Skills",
+      "Strong Problem Solving Skills",
+      "Teamwork and Cross-Functional Collaboration",
+      "Adaptability in Fast-Paced Environments",
+      "Curiosity and Passion for Innovation"
     ]
   },
   "skills": [
-    "Python",
-    "SQL",
-    "TypeScript",
-    "Agentic AI",
-    "Multi-Agent Orchestration",
-    "LLMs",
-    "RAG",
-    "LangChain",
-    "PyTorch",
-    "FastAPI",
-    "PostgreSQL",
-    "pgvector",
-    "ChromaDB",
-    "Docker",
     "Power BI",
+    "DAX",
     "Power Query",
+    "SQL",
+    "Data Modeling",
+    "KPI and Sales-Trend Reporting",
+    "Stakeholder Communication",
+    "Large Language Models (LLMs)",
+    "Agentic AI",
+    "Generative AI (GenAI)",
+    "Retrieval-Augmented Generation (RAG)",
+    "Machine Learning",
+    "Prompt Engineering",
+    "LangChain",
+    "Hugging Face Transformers",
+    "PyTorch",
+    "TensorFlow",
     "Scikit-learn",
     "XGBoost",
-    "TensorFlow",
-    "Hugging Face",
-    "LangSmith",
-    "Pandas",
-    "NumPy"
+    "Python",
+    "TypeScript",
+    "FastAPI",
+    "REST APIs",
+    "React",
+    "Next.js",
+    "PostgreSQL",
+    "Supabase",
+    "Docker",
+    "Vercel",
+    "Hugging Face Spaces",
+    "Git",
+    "GitHub",
+    "Jupyter Notebook"
   ],
   "education": [
-    "Bachelor of Science, Computer Science — Very Good — El Shorouk Academy, Cairo, Egypt (Sep 2019 – Aug 2023). Graduation Project: ECHO Virtual Assistant (Rated Excellent)"
+    "Bachelor of Science, Computer Science - Final Grade: Very Good - El Shorouk Academy, Cairo, Egypt (Sep 2020 - Aug 2024). Graduation Project: ECHO Virtual Assistant, rated Excellent"
   ],
   "certifications": [
-    "DataCamp: Associate Data Analyst Certification",
-    "DataCamp: Associate Data Engineer in SQL (28 hrs)",
-    "DataCamp: SQL Associate & Python Data Associate",
-    "IBM (Coursera): Databases and SQL for Data Science with Python (Honors)",
-    "DeepLearning.AI: Advanced Learning Algorithms",
+    "DataCamp: Data Analyst Associate Certificate",
+    "DataCamp: SQL Associate Certificate",
+    "DataCamp: Python Data Associate Certificate",
+    "IBM (Coursera): Databases and SQL for Data Science",
+    "Coursera: Introduction to Data Analysis with Excel",
+    "HackerRank: SQL (Basic) Certificate",
+    "ITI Mahara-Tech (AI Academy): Python Programming Basics",
     "Coursera: Mathematics for Machine Learning and Data Science Specialization",
-    "Coursera: Supervised Machine Learning (Regression and Classification)",
-    "ITI Mahara-Tech: Generative AI & Practical Machine Learning for Data Science"
+    "DeepLearning.AI: Advanced Learning Algorithms",
+    "Coursera: Supervised Machine Learning",
+    "IBM (Coursera): Python for Data Science, AI and Development"
   ],
   "simulations": [
-    "Deloitte Australia — Virtual Data Analyst Job Simulation (via Forage): Python, statistical analysis, stakeholder mapping, data preprocessing."
+    "Deloitte Australia - Virtual Data Analyst Job Simulation (via Forage): Python, statistical analysis, stakeholder mapping, data preprocessing."
   ],
   "languages": [
     "Arabic (Native)",
