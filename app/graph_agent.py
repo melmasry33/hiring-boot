@@ -307,9 +307,13 @@ async def build_application(
     selected_experience: ALL experience entries from the real profile, in the
         requested display order. Rewrite the existing bullets to emphasize the
         job, but preserve the number of bullets and never invent achievements.
-    selected_projects: ALL profile projects, in the requested display order.
-        Rewrite existing bullets for job relevance, but do not remove projects
-        or invent facts.
+    selected_projects: choose the TOP 5 most relevant projects from the selected
+        baseline after comparing the ENTIRE job posting — responsibilities,
+        must-have requirements, preferred requirements, technologies, domain,
+        seniority, and keywords. Return them in relevance order (best first).
+        Rewrite existing bullets for job relevance, but do not invent facts.
+        If the baseline contains fewer than 5 projects, use all available
+        projects.
     skills_categories: ALL profile skill categories, reordered so job-relevant
         ones lead; never remove a category or skill.
     email_subject: max 80 characters.
@@ -419,6 +423,10 @@ async def build_application(
     def _canonical_projects(items: List[dict]) -> List[dict]:
         ordered: List[dict] = []
         used = set()
+
+        # The LLM supplies the relevance ranking. We preserve that ranking,
+        # canonicalize every selected project against the user's baseline, and
+        # then hard-cap the final CV at the top five.
         for item in items or []:
             if not isinstance(item, dict):
                 continue
@@ -434,10 +442,17 @@ async def build_application(
                 merged["bullets"] = _merge_bullets(match, item)
                 ordered.append(merged)
 
-        for idx, src in enumerate(variant_projects):
-            if idx not in used:
-                ordered.append(dict(src))
-        return ordered
+        # If the model returned fewer than five valid project names, fill the
+        # remaining slots from the untouched baseline in its original order.
+        # This guarantees a stable <=5-project CV without inventing content.
+        if len(ordered) < min(5, len(variant_projects)):
+            for idx, src in enumerate(variant_projects):
+                if idx not in used:
+                    ordered.append(dict(src))
+                if len(ordered) >= 5:
+                    break
+
+        return ordered[:5]
 
     def _canonical_certifications(items: Optional[List[str]]) -> List[str]:
         requested = [_norm(x) for x in (items or [])]
@@ -514,6 +529,7 @@ async def build_application(
         ),
         "draft_subject": draft["email_subject"],
         "draft_recruiter_email": draft["recruiter_email"] or None,
+        "selected_projects": [p.get("name") for p in cv_data.get("projects", [])],
         # Consumed by run_turn to attach the PDF to this turn's reply.
         "_attachment": {"path": pdf_path, "caption": f"Tailored CV [{variant_key}] — {role} at {company}"},
     }
@@ -641,9 +657,10 @@ How you behave:
 4. When given a link, call read_job. When given pasted text, use it directly. If LinkedIn refuses the server (it throttles cloud IPs), say so plainly and ask the user to paste the description — do not pretend you read it.
 5. score_match, build_application and send_email will refuse to run out of order (they'll tell you what's missing) — that's expected, just do the missing step and retry, don't apologize for it in the reply.
 6. Choose the correct user-authored CV baseline for the job: "bi" for Power BI / Business Intelligence / reporting roles, "data_analyst" for Data Analyst / operations / supply-chain analytics roles, "data_scientist" for Data Scientist / ML / DL roles, and "ai" for AI Engineer / LLM / Agentic AI roles. Use resume_variant="auto" unless there is a clear reason to force one.
-7. Each baseline has a fixed structure and complete content. NEVER delete an experience entry, project, certification, education entry, language, additional-information item, training item, or skills category from the selected baseline. Never turn a full CV into a short one just because a job is narrower.
-8. Tailor ONLY what already exists in the selected baseline: rewrite the Professional Summary and existing experience/project paragraphs to emphasize the job's requirements, reorder existing bullets/categories to make the most relevant evidence appear first, and adjust the headline. Preserve every underlying fact, employer, date, project, technology, certification, and the number of bullets/paragraphs for each entry. Do not invent, merge, or replace content.
-8. Keep the email consistent with the CV — same projects, same claims.
+7. Each baseline has a fixed, complete source of truth. NEVER delete an experience entry, certification, education entry, language, additional-information item, training item, or skills category from the selected baseline.
+8. For projects, evaluate the ENTIRE job posting and select the TOP 5 most relevant projects from the selected baseline. Rank them by how directly they satisfy the job's responsibilities, must-have/preferred requirements, technologies, domain, seniority, and keywords. Return those projects in relevance order and use only those projects in the CV/email. If the baseline has fewer than 5 projects, use all of them.
+9. Tailor ONLY what already exists in the selected baseline: rewrite the Professional Summary and existing experience/project paragraphs to emphasize the job's requirements, reorder existing bullets/categories to make the most relevant evidence appear first, and adjust the headline. Preserve every underlying fact, employer, date, project, technology, certification, and the number of bullets/paragraphs for each selected entry. Do not invent, merge, or replace content.
+10. Keep the email consistent with the CV — reference the same selected projects and the same claims.
 9. You cannot send anything on your own. send_email only asks for permission; the human approves. Never say an email was sent unless a tool result told you it was.
 10. Call track_application after every draft and every send, so the history stays useful.
 11. Be efficient with the user's time. Short messages, no filler. Telegram-friendly formatting: short paragraphs, occasional bullets, no markdown tables.
