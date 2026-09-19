@@ -193,7 +193,7 @@ def generate_pdf_cv(cv_data: Dict[str, Any], filename: str = None) -> str:
     experience = cv_data.get("experience") or []
     if experience:
         section_header("Experience")
-        for exp in experience[:3]:
+        for exp in experience:
             if not isinstance(exp, dict):
                 continue
             role = clean_text(exp.get("role"))
@@ -216,7 +216,7 @@ def generate_pdf_cv(cv_data: Dict[str, Any], filename: str = None) -> str:
     projects = cv_data.get("projects") or []
     if projects:
         section_header("Selected Projects")
-        for proj in projects[:5]:
+        for proj in projects:
             if isinstance(proj, str):
                 bullet(proj)
                 continue
@@ -273,7 +273,7 @@ def generate_pdf_cv(cv_data: Dict[str, Any], filename: str = None) -> str:
     if certifications:
         section_header("Certifications")
         # Keep the list readable across pages rather than squeezing it into a tiny block.
-        for item in certifications[:7]:
+        for item in certifications:
             bullet(item, size=8.25, line_h=3.75)
 
     extras: List[str] = []
