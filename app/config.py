@@ -112,12 +112,12 @@ LLM_MAX_RETRIES = max(0, min(_env_int("LLM_MAX_RETRIES", 0), 5))
 # controls its own backoff schedule and does not expose a base-delay argument.
 LLM_RETRY_BASE_DELAY = max(0.0, float(_env("LLM_RETRY_BASE_DELAY", "0.5") or 0.5))
 LLM_TEMPERATURE = float(_env("LLM_TEMPERATURE", "0.3") or 0.3)
-LLM_MAX_TOKENS = _env_int("LLM_MAX_TOKENS", 2048)
+LLM_MAX_TOKENS = _env_int("LLM_MAX_TOKENS", 1024)
 
 # Hard ceiling on tool-calling steps inside one agent turn.
 MAX_TOOL_STEPS = _env_int("MAX_TOOL_STEPS", 12)
 # How many messages of conversation history to keep per user before trimming.
-MAX_HISTORY_MESSAGES = _env_int("MAX_HISTORY_MESSAGES", 20)
+MAX_HISTORY_MESSAGES = _env_int("MAX_HISTORY_MESSAGES", 10)
 
 # ---------------------------------------------------------------------------
 # Telegram
