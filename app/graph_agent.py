@@ -551,8 +551,9 @@ def _build_client(model: str) -> ChatOpenAI:
         "z-ai/glm-5.3-flash",
         "z-ai/glm-5.3",
         "openai/gpt-oss-20b",
+        "openai/gpt-oss-120b",
     }:
-        client_kwargs["reasoning_effort"] = "low"
+        client_kwargs["reasoning_effort"] = "medium"
     return ChatOpenAI(**client_kwargs).bind_tools(TOOLS, parallel_tool_calls=False)
 
 
