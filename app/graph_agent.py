@@ -317,7 +317,18 @@ async def build_application(
     skills_categories: ALL profile skill categories, reordered so job-relevant
         ones lead; never remove a category or skill.
     email_subject: max 80 characters.
-    email_body: application email referencing the SAME projects as the CV.
+    email_body: a polished, human-sounding plain-text application email referencing
+        the SAME selected projects as the CV. Keep it concise: about 120-180 words.
+        Use this structure: natural greeting; one short paragraph stating the role
+        and why the candidate's background is relevant; one short paragraph naming
+        1-2 of the strongest matching projects/experiences with concrete technologies
+        or outcomes from the baseline; one short paragraph connecting that evidence
+        to the company's role/problem; a simple closing with CV-attachment mention;
+        professional sign-off. No headings, no "Why I'm a great fit", no bullets,
+        no emojis, no hype, no generic corporate slogans, no invented personal
+        stories, and no claims that cannot be traced to the selected CV baseline or
+        the job posting. Never write Markdown or literal ** / \\* formatting because
+        the email is sent as plain text.
     resume_variant: "auto" or one of "ai", "bi", "data_analyst", "data_scientist".
         Prefer "auto" unless the role clearly identifies the family. The selected
         baseline is a complete user-authored CV; never switch facts between baselines.
@@ -454,7 +465,27 @@ async def build_application(
 
         return ordered[:5]
 
-    def _canonical_certifications(items: Optional[List[str]]) -> List[str]:
+        def _clean_email_body(text: str) -> str:
+        """Normalize the LLM draft into a clean plain-text application email.
+
+        The email is sent as plain text. Remove Markdown artifacts and the
+        common formatting noise that makes generated outreach look machine
+        written, while preserving the wording and claims themselves.
+        """
+        text = str(text or "").replace("\\r\\n", "\\n").replace("\\r", "\\n")
+        text = text.replace("\\u00a0", " ")
+        # Remove escaped/plain Markdown emphasis and heading syntax.
+        text = re.sub(r"\\\\?\\*\\*(.*?)\\\\?\\*\\*", r"\\1", text)
+        text = re.sub(r"(?m)^\\s*#{1,6}\\s*", "", text)
+        text = re.sub(r"(?m)^\\s*[-*+]\\s+", "", text)
+        text = text.replace("\\**", "").replace("**", "")
+        text = re.sub(r"\\\\([*#_\\[\\]()])", r"\\1", text)
+        # Collapse excessive blank space without flattening paragraphs.
+        paragraphs = [re.sub(r"[ \\t]+", " ", p).strip() for p in re.split(r"\\n\\s*\\n+", text)]
+        paragraphs = [p for p in paragraphs if p]
+        return "\\n\\n".join(paragraphs).strip()
+
+def _canonical_certifications(items: Optional[List[str]]) -> List[str]:
         requested = [_norm(x) for x in (items or [])]
         ordered: List[str] = []
         used = set()
@@ -501,13 +532,14 @@ async def build_application(
     safe = "".join(c if c.isalnum() else "_" for c in f"{profile.get('name','CV')}_{company}")[:60]
     pdf_path = cv_generator.generate_pdf_cv(cv_data, filename=f"{safe}.pdf")
 
+    cleaned_email_body = _clean_email_body(email_body)
     draft = {
         "role": role,
         "company": company,
         "job_url": job_url or job.get("job_url", ""),
         "recruiter_email": (recruiter_email or "").strip(),
         "email_subject": (email_subject or "")[:80],
-        "email_body": email_body,
+        "email_body": cleaned_email_body,
         "pdf_path": pdf_path,
         "fit_summary": fit_summary,
         "gap_notes": gap_notes or [],
@@ -661,10 +693,11 @@ How you behave:
 8. For projects, evaluate the ENTIRE job posting and select the TOP 5 most relevant projects from the selected baseline. Rank them by how directly they satisfy the job's responsibilities, must-have/preferred requirements, technologies, domain, seniority, and keywords. Return those projects in relevance order and use only those projects in the CV/email. If the baseline has fewer than 5 projects, use all of them.
 9. Tailor ONLY what already exists in the selected baseline: rewrite the Professional Summary and existing experience/project paragraphs to emphasize the job's requirements, reorder existing bullets/categories to make the most relevant evidence appear first, and adjust the headline. Preserve every underlying fact, employer, date, project, technology, certification, and the number of bullets/paragraphs for each selected entry. Do not invent, merge, or replace content.
 10. Keep the email consistent with the CV — reference the same selected projects and the same claims.
-9. You cannot send anything on your own. send_email only asks for permission; the human approves. Never say an email was sent unless a tool result told you it was.
-10. Call track_application after every draft and every send, so the history stays useful.
-11. Be efficient with the user's time. Short messages, no filler. Telegram-friendly formatting: short paragraphs, occasional bullets, no markdown tables.
-12. Write in the language the user writes to you in. If they write Arabic, answer in Arabic — but keep CV and application-email content in English unless they ask otherwise.
+11. Write the application email as polished plain text, not a sales pitch. Aim for 120-180 words and 3-5 short paragraphs. Use a natural greeting such as "Dear [Company] Hiring Team," when no recruiter name is known. Open directly with the role and the candidate's relevant background. Mention only 1-2 highly relevant projects or experiences, with concrete technologies/results. Avoid headings, bullet lists, "Why I'm a great fit", "thrilled/excited to apply", excessive adjectives, generic statements about being a "perfect/great fit", repeated resume content, emojis, Markdown, and invented personal/family anecdotes. Do not claim a business or industry connection that is not supported by the profile or the posting. Close with a simple invitation to discuss and a professional sign-off. Use the candidate's real name and contact details only when supported by the profile.
+12. You cannot send anything on your own. send_email only asks for permission; the human approves. Never say an email was sent unless a tool result told you it was.
+13. Call track_application after every draft and every send, so the history stays useful.
+14. Be efficient with the user's time. Short messages, no filler. Telegram-friendly formatting: short paragraphs, occasional bullets, no markdown tables.
+15. Write in the language the user writes to you in. If they write Arabic, answer in Arabic — but keep CV and application-email content in English unless they ask otherwise.
 """
 
 
