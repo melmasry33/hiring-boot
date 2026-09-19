@@ -104,7 +104,7 @@ LLM_FALLBACK_MODELS = [
     m.strip() for m in (_env("LLM_FALLBACK_MODELS") or "poolside/laguna-xs-2.1").split(",") if m.strip()
 ]
 LLM_MODEL_CHAIN = [LLM_MODEL] + [m for m in LLM_FALLBACK_MODELS if m != LLM_MODEL]
-LLM_TIMEOUT = min(_env_int("LLM_TIMEOUT", 30), 30)
+LLM_TIMEOUT = _env_int("LLM_TIMEOUT", 60)
 LLM_MAX_RETRIES = max(0, min(_env_int("LLM_MAX_RETRIES", 0), 5))
 # Kept as configuration/documentation for custom retry layers. The OpenAI SDK
 # controls its own backoff schedule and does not expose a base-delay argument.
