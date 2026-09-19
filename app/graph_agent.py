@@ -405,13 +405,13 @@ async def build_application(
                 None,
             )
             if match is not None:
-                idx = profile_experience.index(match)
+                idx = variant_experience.index(match)
                 used.add(idx)
                 merged = dict(match)
                 merged["bullets"] = _merge_bullets(match, item)
                 ordered.append(merged)
 
-        for idx, src in enumerate(profile_experience):
+        for idx, src in enumerate(variant_experience):
             if idx not in used:
                 ordered.append(dict(src))
         return ordered
@@ -428,13 +428,13 @@ async def build_application(
                 None,
             )
             if match is not None:
-                idx = profile_projects.index(match)
+                idx = variant_projects.index(match)
                 used.add(idx)
                 merged = dict(match)
                 merged["bullets"] = _merge_bullets(match, item)
                 ordered.append(merged)
 
-        for idx, src in enumerate(profile_projects):
+        for idx, src in enumerate(variant_projects):
             if idx not in used:
                 ordered.append(dict(src))
         return ordered
@@ -450,7 +450,7 @@ async def build_application(
                     used.add(idx)
                     break
         # Never delete certifications; requested order only affects prominence.
-        ordered.extend(src for idx, src in enumerate(profile_certs) if idx not in used)
+        ordered.extend(src for idx, src in enumerate(variant_certs) if idx not in used)
         return ordered
 
     # Reorder categories according to the model's requested order, but retain
@@ -459,7 +459,7 @@ async def build_application(
     ordered_skill_categories: Dict[str, List[str]] = {}
     for key in (skills_categories or {}).keys():
         if key in variant_skill_categories and key not in ordered_skill_categories:
-            ordered_skill_categories[key] = list(profile_skill_categories[key])
+            ordered_skill_categories[key] = list(variant_skill_categories[key])
     for key, values in variant_skill_categories.items():
         if key not in ordered_skill_categories:
             ordered_skill_categories[key] = list(values)
@@ -640,8 +640,9 @@ How you behave:
 3. Always call get_profile before writing CV or email content. Do not work from memory of an earlier turn's summary.
 4. When given a link, call read_job. When given pasted text, use it directly. If LinkedIn refuses the server (it throttles cloud IPs), say so plainly and ask the user to paste the description — do not pretend you read it.
 5. score_match, build_application and send_email will refuse to run out of order (they'll tell you what's missing) — that's expected, just do the missing step and retry, don't apologize for it in the reply.
-6. The CV has a fixed structure and complete content. NEVER delete an experience entry, project, certification, education entry, language, additional-information item, or skills category from the canonical profile. Never turn a full CV into a short one just because a job is narrower.
-7. Tailor ONLY what already exists: rewrite the Professional Summary and existing experience/project paragraphs to emphasize the job's requirements, reorder existing bullets/categories to make the most relevant evidence appear first, and adjust the headline. Preserve every underlying fact, employer, date, project, technology, certification, and the number of bullets/paragraphs for each entry. Do not invent, merge, or replace content.
+6. Choose the correct user-authored CV baseline for the job: "bi" for Power BI / Business Intelligence / reporting roles, "data_analyst" for Data Analyst / operations / supply-chain analytics roles, "data_scientist" for Data Scientist / ML / DL roles, and "ai" for AI Engineer / LLM / Agentic AI roles. Use resume_variant="auto" unless there is a clear reason to force one.
+7. Each baseline has a fixed structure and complete content. NEVER delete an experience entry, project, certification, education entry, language, additional-information item, training item, or skills category from the selected baseline. Never turn a full CV into a short one just because a job is narrower.
+8. Tailor ONLY what already exists in the selected baseline: rewrite the Professional Summary and existing experience/project paragraphs to emphasize the job's requirements, reorder existing bullets/categories to make the most relevant evidence appear first, and adjust the headline. Preserve every underlying fact, employer, date, project, technology, certification, and the number of bullets/paragraphs for each entry. Do not invent, merge, or replace content.
 8. Keep the email consistent with the CV — same projects, same claims.
 9. You cannot send anything on your own. send_email only asks for permission; the human approves. Never say an email was sent unless a tool result told you it was.
 10. Call track_application after every draft and every send, so the history stays useful.
