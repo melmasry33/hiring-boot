@@ -697,20 +697,28 @@ def _agent_node(state: AgentState) -> dict:
             break
         except Exception as e:
             error_text = str(e).lower()
+            is_rate_limited = "429" in error_text or "rate limit" in error_text
             transient = (
                 "503" in error_text
                 or "service unavailable" in error_text
                 or "resourceexhausted" in error_text
-                or "429" in error_text
+                or is_rate_limited
                 or "timeout" in error_text
                 or "timed out" in error_text
             )
             if transient and attempts_on_model < max_transient_retries:
+                # Groq includes a concrete retry window in 429 errors
+                # (e.g. "try again in 6.66s"). Honor it instead of hammering
+                # the same token bucket with 1s/2s retries.
                 delay = 2 ** attempts_on_model
+                if is_rate_limited:
+                    match = re.search(r"try again in ([0-9.]+)s", str(e), re.IGNORECASE)
+                    if match:
+                        delay = min(max(float(match.group(1)) + 0.5, 1.0), 60.0)
                 attempts_on_model += 1
                 logger.warning(
                     f"Transient LLM error on '{active_model()}'; "
-                    f"retrying in {delay}s ({attempts_on_model}/{max_transient_retries})."
+                    f"retrying in {delay:.1f}s ({attempts_on_model}/{max_transient_retries})."
                 )
                 time.sleep(delay)
                 continue
