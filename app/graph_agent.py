@@ -287,6 +287,7 @@ async def build_application(
     job_url: str = "",
     recruiter_email: str = "",
     selected_certifications: Optional[List[str]] = None,
+    resume_variant: str = "auto",
 ) -> Command:
     """Produce the tailored application package: generates a real ATS-friendly
     PDF CV (sent to the user automatically) and stores the email draft.
@@ -313,6 +314,9 @@ async def build_application(
         ones lead; never remove a category or skill.
     email_subject: max 80 characters.
     email_body: application email referencing the SAME projects as the CV.
+    resume_variant: "auto" or one of "ai", "bi", "data_analyst", "data_scientist".
+        Prefer "auto" unless the role clearly identifies the family. The selected
+        baseline is a complete user-authored CV; never switch facts between baselines.
     recruiter_email: leave empty if genuinely unknown.
     """
     job = _job(state)
@@ -324,15 +328,50 @@ async def build_application(
     user_id = state["user_id"]
     profile = store.load_profile()
 
-    # The model may tailor wording and reorder content, but the canonical
-    # resume is never shortened. Every experience, project, certification and
-    # profile section remains present in the generated CV.
+    # Four user-authored CV baselines live in data/cv_variants.json. The
+    # selected baseline determines facts, sections and original paragraphs;
+    # tailoring may only rewrite/reorder those existing paragraphs.
+    variants_path = DATA_DIR / "cv_variants.json"
+    try:
+        variants = json.loads(variants_path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return _blocked(tool_call_id, f"CV baseline file could not be loaded: {exc}")
+
     def _norm(value: Any) -> str:
         return re.sub(r"\s+", " ", str(value or "").strip().lower())
 
-    profile_experience = profile.get("experience") or []
-    profile_projects = profile.get("projects") or []
-    profile_certs = profile.get("certifications") or []
+    def _auto_variant(role_text: str, job_text: str) -> str:
+        hay = _norm(role_text + " " + job_text)
+        if any(k in hay for k in ("power bi", "business intelligence", "bi developer", "dax", "power query", "reporting developer", "bi analyst")):
+            return "bi"
+        if any(k in hay for k in ("data scientist", "machine learning engineer", "ml engineer", "machine learning", "deep learning", "computer vision", "pytorch", "tensorflow", "applied scientist")):
+            return "data_scientist"
+        if any(k in hay for k in ("data analyst", "business analyst", "product analytics", "operations analytics", "supply chain", "tableau", "analytics analyst")):
+            return "data_analyst"
+        return "ai"
+
+    requested_variant = _norm(resume_variant).replace("-", "_").replace(" ", "_")
+    variant_aliases = {
+        "dataanalysis": "data_analyst",
+        "data_analysis": "data_analyst",
+        "dataanalyst": "data_analyst",
+        "datascience": "data_scientist",
+        "datascientist": "data_scientist",
+        "machine_learning": "data_scientist",
+        "ml": "data_scientist",
+        "powerbi": "bi",
+        "business_intelligence": "bi",
+        "ai_ml": "ai",
+        "llm": "ai",
+        "agentic": "ai",
+    }
+    requested_variant = variant_aliases.get(requested_variant, requested_variant)
+    variant_key = requested_variant if requested_variant in variants else _auto_variant(role, job.get("job_text", ""))
+    variant = variants[variant_key]
+
+    variant_experience = variant.get("experience") or []
+    variant_projects = variant.get("projects") or []
+    variant_certs = variant.get("certifications") or []
 
     def _merge_bullets(source: dict, drafted: dict) -> List[str]:
         original = list(source.get("bullets") or [])
@@ -353,7 +392,7 @@ async def build_application(
             company = _norm(item.get("company"))
             match = next(
                 (
-                    src for idx, src in enumerate(profile_experience)
+                    src for idx, src in enumerate(variant_experience)
                     if idx not in used and (
                         _norm(src.get("role")) == role
                         or (
@@ -385,7 +424,7 @@ async def build_application(
                 continue
             name = _norm(item.get("name"))
             match = next(
-                (src for idx, src in enumerate(profile_projects) if idx not in used and _norm(src.get("name")) == name),
+                (src for idx, src in enumerate(variant_projects) if idx not in used and _norm(src.get("name")) == name),
                 None,
             )
             if match is not None:
@@ -405,7 +444,7 @@ async def build_application(
         ordered: List[str] = []
         used = set()
         for wanted in requested:
-            for idx, src in enumerate(profile_certs):
+            for idx, src in enumerate(variant_certs):
                 if idx not in used and _norm(src) == wanted:
                     ordered.append(src)
                     used.add(idx)
@@ -415,20 +454,20 @@ async def build_application(
         return ordered
 
     # Reorder categories according to the model's requested order, but retain
-    # every canonical category and every skill inside those categories.
-    profile_skill_categories = profile.get("skills_categories") or {}
+    # every category and every skill from the selected CV baseline.
+    variant_skill_categories = variant.get("skills_categories") or {}
     ordered_skill_categories: Dict[str, List[str]] = {}
     for key in (skills_categories or {}).keys():
-        if key in profile_skill_categories and key not in ordered_skill_categories:
+        if key in variant_skill_categories and key not in ordered_skill_categories:
             ordered_skill_categories[key] = list(profile_skill_categories[key])
-    for key, values in profile_skill_categories.items():
+    for key, values in variant_skill_categories.items():
         if key not in ordered_skill_categories:
             ordered_skill_categories[key] = list(values)
 
     cv_data = {
         "name": profile.get("name", ""),
-        "headline": (headline or profile.get("headline", "")).strip(),
-        "summary": (summary or profile.get("summary", "")).strip(),
+        "headline": (headline or variant.get("headline") or profile.get("headline", "")).strip(),
+        "summary": (summary or variant.get("summary") or profile.get("summary", "")).strip(),
         "location": profile.get("location", ""),
         "phone": profile.get("phone", ""),
         "email": profile.get("email", ""),
@@ -437,11 +476,12 @@ async def build_application(
         "datacamp": profile.get("datacamp", ""),
         "experience": _canonical_experience(selected_experience),
         "projects": _canonical_projects(selected_projects),
-        "education": profile.get("education", []),
-        "certifications": _canonical_certifications(selected_certifications),
-        "languages": profile.get("languages", []),
-        "military_service": profile.get("military_service", ""),
-        "skills_categories": ordered_skill_categories,
+        "education": variant.get("education", []),
+        "certifications": _canonical_certifications(selected_certifications or variant.get("certifications", [])),
+        "training": variant.get("training", []),
+        "languages": variant.get("languages", []),
+        "military_service": variant.get("additional_information") or profile.get("military_service", ""),
+        "skills_categories": ordered_skill_categories or variant_skill_categories,
     }
     safe = "".join(c if c.isalnum() else "_" for c in f"{profile.get('name','CV')}_{company}")[:60]
     pdf_path = cv_generator.generate_pdf_cv(cv_data, filename=f"{safe}.pdf")
@@ -465,6 +505,7 @@ async def build_application(
         "ok": True,
         "cv_generated": True,
         "cv_file": pdf_path,
+        "resume_variant": variant_key,
         "message": (
             "The tailored CV PDF has been sent to the user in this chat and the email "
             "draft is staged. Summarise the fit and the gaps in your reply, show the "
@@ -474,7 +515,7 @@ async def build_application(
         "draft_subject": draft["email_subject"],
         "draft_recruiter_email": draft["recruiter_email"] or None,
         # Consumed by run_turn to attach the PDF to this turn's reply.
-        "_attachment": {"path": pdf_path, "caption": f"Tailored CV — {role} at {company}"},
+        "_attachment": {"path": pdf_path, "caption": f"Tailored CV [{variant_key}] — {role} at {company}"},
     }
     return Command(
         update={
