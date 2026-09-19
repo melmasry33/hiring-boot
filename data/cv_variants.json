@@ -79,6 +79,15 @@
         "bullets": [
           "Engineered a transformer from scratch, including tokenizer, self-attention, and a full training/inference pipeline, to build first-principles understanding of the LLMs behind today's Agentic AI and GenAI products."
         ]
+      },
+      {
+        "name": "Voice Automation Agent - AI Calendar Assistant",
+        "tech": "Python, OpenAI GPT-5, Google Calendar API, gTTS, pygame, CustomTkinter",
+        "links": "GitHub: https://github.com/Mohamed-Elmasry16/Voice-Automation-Agent",
+        "bullets": [
+          "Built a voice-driven calendar automation assistant that uses OpenAI GPT-5 for natural-language command understanding and Google Calendar API integration to list, book, and cancel real events.",
+          "Developed an interactive desktop GUI with CustomTkinter, voice input, and text-to-speech responses using gTTS and pygame for a conversational end-to-end experience."
+        ]
       }
     ],
     "skills_categories": {
