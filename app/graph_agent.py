@@ -463,17 +463,7 @@ async def build_application(
                 if len(ordered) >= 5:
                     break
 
-        canonical_projects = ordered[:5]
-        # Never silently fill missing project slots with arbitrary baseline
-        # projects. If the model did not supply five valid choices for a
-        # baseline that has five or more projects, stop and make it retry.
-        # This prevents truncated tool output from producing a bad CV.
-        if len(variant_projects) >= 5 and len(canonical_projects) < 5:
-            raise ValueError(
-                "Project selection was incomplete: provide exactly five valid "
-                "projects from the selected baseline, ranked by full-job relevance."
-            )
-        return canonical_projects
+        return ordered[:5]
 
     def _clean_email_body(text: str) -> str:
         """Normalize the LLM draft into clean plain-text application email."""
@@ -513,6 +503,15 @@ async def build_application(
         if key not in ordered_skill_categories:
             ordered_skill_categories[key] = list(values)
 
+    canonical_projects = _canonical_projects(selected_projects)
+    if len(variant_projects) >= 5 and len(canonical_projects) < 5:
+        return _blocked(
+            tool_call_id,
+            "Project selection was incomplete. Re-run build_application and provide "
+            "exactly 5 valid projects from the selected CV baseline, ranked by the "
+            "entire job posting. Do not substitute arbitrary baseline projects."
+        )
+
     cv_data = {
         "name": profile.get("name", ""),
         "headline": (headline or variant.get("headline") or profile.get("headline", "")).strip(),
@@ -524,7 +523,7 @@ async def build_application(
         "github": profile.get("github", ""),
         "datacamp": profile.get("datacamp", ""),
         "experience": _canonical_experience(selected_experience),
-        "projects": _canonical_projects(selected_projects),
+        "projects": canonical_projects,
         "education": variant.get("education", []),
         "certifications": _canonical_certifications(selected_certifications or variant.get("certifications", [])),
         "training": variant.get("training", []),
