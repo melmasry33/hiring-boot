@@ -132,10 +132,13 @@ TELEGRAM_ALLOWED_USER_IDS = [
 ]
 
 # ---------------------------------------------------------------------------
-# Email (Resend HTTPS API)
+# Email (Gmail API over HTTPS)
 # ---------------------------------------------------------------------------
 
-RESEND_API_KEY = _env("RESEND_API_KEY")
+GMAIL_CLIENT_ID = _env("GMAIL_CLIENT_ID")
+GMAIL_CLIENT_SECRET = _env("GMAIL_CLIENT_SECRET")
+GMAIL_REFRESH_TOKEN = _env("GMAIL_REFRESH_TOKEN")
+GMAIL_TOKEN_URI = _env("GMAIL_TOKEN_URI", "https://oauth2.googleapis.com/token")
 SENDER_EMAIL = _env("SENDER_EMAIL")
 SENDER_NAME = _env("SENDER_NAME")
 
@@ -194,10 +197,18 @@ def startup_report() -> list:
         problems.append(f"WARN: {note}")
     if not PROFILE_PATH.exists():
         problems.append(f"WARN: no profile at {PROFILE_PATH} — run /profile in the bot to set one up.")
-    if not RESEND_API_KEY:
-        problems.append("WARN: RESEND_API_KEY not set — drafting works, sending will fail.")
-    if not SENDER_EMAIL:
-        problems.append("WARN: SENDER_EMAIL not set — configure a verified Resend sender address.")
+    missing_gmail = [
+        name for name, value in (
+            ("GMAIL_CLIENT_ID", GMAIL_CLIENT_ID),
+            ("GMAIL_CLIENT_SECRET", GMAIL_CLIENT_SECRET),
+            ("GMAIL_REFRESH_TOKEN", GMAIL_REFRESH_TOKEN),
+        ) if not value
+    ]
+    if missing_gmail:
+        problems.append(
+            "WARN: Gmail API auth is incomplete — missing " + ", ".join(missing_gmail) +
+            ". Drafting works, sending will fail."
+        )
     if not TELEGRAM_ALLOWED_USER_IDS:
         problems.append(
             "WARN: TELEGRAM_ALLOWED_USER_ID is empty — ANYONE who finds your bot can use "
