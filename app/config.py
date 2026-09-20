@@ -60,6 +60,8 @@ PROFILE_PATH = DATA_DIR / "profile.json"
 APPLICATIONS_PATH = DATA_DIR / "applications.json"
 CONVERSATIONS_PATH = DATA_DIR / "conversations.json"
 NOTES_PATH = DATA_DIR / "notes.json"
+# Authored CV baselines live in the repo seed, not on the mutable volume.
+CV_VARIANTS_PATH = SEED_DIR / "cv_variants.json"
 
 # Generated PDFs are disposable — they get regenerated on demand and are sent
 # straight to Telegram, so keeping them in /tmp avoids bloating the volume.

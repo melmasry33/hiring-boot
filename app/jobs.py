@@ -39,8 +39,8 @@ _HEADERS = {
 EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 
 
-def strip_html(raw: str, limit: int = 8000) -> str:
-    """Crude but effective tag stripper — good enough for job postings."""
+def strip_html(raw: str, limit: Optional[int] = None) -> str:
+    """Tag stripper for job postings. Does not silently pretend truncation didn't happen."""
     if not raw:
         return ""
     text = re.sub(r"<script[\s\S]*?</script>", " ", raw, flags=re.IGNORECASE)
@@ -52,7 +52,22 @@ def strip_html(raw: str, limit: int = 8000) -> str:
     text = html_lib.unescape(text)
     text = re.sub(r"[ \t\r\f\v]+", " ", text)
     text = re.sub(r"\n\s*\n\s*\n+", "\n\n", text)
-    return text.strip()[:limit]
+    cleaned = text.strip()
+    if limit is not None and len(cleaned) > limit:
+        return cleaned[:limit]
+    return cleaned
+
+
+def strip_html_with_meta(raw: str, limit: Optional[int] = None) -> Dict[str, Any]:
+    full = strip_html(raw, limit=None)
+    truncated = bool(limit is not None and len(full) > limit)
+    text = full[:limit] if truncated else full
+    return {
+        "text": text,
+        "full_chars": len(full),
+        "returned_chars": len(text),
+        "truncated": truncated,
+    }
 
 
 def extract_emails(text: str) -> List[str]:
@@ -85,7 +100,7 @@ def linkedin_job_id(url: str) -> Optional[str]:
     return None
 
 
-async def fetch_page(url: str, limit: int = 8000) -> Dict[str, Any]:
+async def fetch_page(url: str, limit: Optional[int] = None) -> Dict[str, Any]:
     """Fetch any URL and return cleaned text. Never raises."""
     if not url or not url.startswith(("http://", "https://")):
         return {"ok": False, "url": url, "error": "Not a valid http(s) URL."}
@@ -101,13 +116,15 @@ async def fetch_page(url: str, limit: int = 8000) -> Dict[str, Any]:
                     "status": resp.status_code,
                     "error": f"Server returned HTTP {resp.status_code}.",
                 }
-            text = strip_html(resp.text, limit=limit)
+            meta = strip_html_with_meta(resp.text, limit=limit)
             return {
                 "ok": True,
                 "url": str(resp.url),
                 "status": resp.status_code,
-                "content": text,
-                "emails_found": extract_emails(text),
+                "content": meta["text"],
+                "truncated": meta["truncated"],
+                "full_chars": meta["full_chars"],
+                "emails_found": extract_emails(meta["text"] if not meta["truncated"] else strip_html(resp.text)),
             }
     except Exception as e:
         logger.warning(f"fetch_page failed for {url}: {e}")

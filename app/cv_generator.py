@@ -9,11 +9,36 @@ from fpdf.enums import XPos, YPos
 from config import GENERATED_CVS_DIR, logger
 
 
-FONT_DIR = Path("/usr/share/fonts/truetype/dejavu")
-FONT_REGULAR = FONT_DIR / "DejaVuSans.ttf"
-FONT_BOLD = FONT_DIR / "DejaVuSans-Bold.ttf"
-FONT_ITALIC = FONT_DIR / "DejaVuSans-Oblique.ttf"
-FONT_BOLD_ITALIC = FONT_DIR / "DejaVuSans-BoldOblique.ttf"
+def _resolve_fonts() -> tuple[Path, Path, Path, Path]:
+    packs = [
+        (
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf"),
+        ),
+        (
+            Path("C:/Windows/Fonts/arial.ttf"),
+            Path("C:/Windows/Fonts/arialbd.ttf"),
+            Path("C:/Windows/Fonts/ariali.ttf"),
+            Path("C:/Windows/Fonts/arialbi.ttf"),
+        ),
+        (
+            Path("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"),
+            Path("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"),
+            Path("/usr/share/fonts/truetype/liberation/LiberationSans-Italic.ttf"),
+            Path("/usr/share/fonts/truetype/liberation/LiberationSans-BoldItalic.ttf"),
+        ),
+    ]
+    for regular, bold, italic, bold_italic in packs:
+        if regular.exists() and bold.exists():
+            return regular, bold, italic if italic.exists() else regular, bold_italic if bold_italic.exists() else bold
+    raise RuntimeError(
+        "Unicode CV fonts are missing. Install fonts-dejavu (Linux) or use Arial (Windows)."
+    )
+
+
+FONT_REGULAR, FONT_BOLD, FONT_ITALIC, FONT_BOLD_ITALIC = _resolve_fonts()
 
 
 class PDFResume(FPDF):
@@ -34,12 +59,9 @@ def clean_text(value: Any) -> str:
 
 
 def _ensure_fonts() -> None:
-    missing = [str(p) for p in (FONT_REGULAR, FONT_BOLD, FONT_ITALIC, FONT_BOLD_ITALIC) if not p.exists()]
+    missing = [str(p) for p in (FONT_REGULAR, FONT_BOLD) if not p.exists()]
     if missing:
-        raise RuntimeError(
-            "Unicode CV fonts are missing from the image. Expected DejaVu fonts at "
-            + ", ".join(missing)
-        )
+        raise RuntimeError("Unicode CV fonts are missing: " + ", ".join(missing))
 
 
 def _safe_filename(name: str) -> str:
@@ -117,21 +139,35 @@ def generate_pdf_cv(cv_data: Dict[str, Any], filename: str = None) -> str:
         pdf.ln(0.35)
 
     def entry_heading(left: str, right: str = ""):
+        left_s = clean_text(left)
+        right_s = clean_text(right)
         set_font("B", 9.45, dark)
-        pdf.cell(epw * 0.72, 5.0, clean_text(left), new_x=XPos.RIGHT, new_y=YPos.TOP)
-        if right:
-            set_font("I", 8.0, muted)
-            pdf.cell(epw * 0.28, 5.0, clean_text(right), new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="R")
-        else:
-            pdf.ln(5.0)
+        if not right_s:
+            pdf.multi_cell(epw, 5.0, left_s, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            return
+        left_w = epw * 0.68
+        y0 = pdf.get_y()
+        pdf.multi_cell(left_w, 5.0, left_s, new_x=XPos.RIGHT, new_y=YPos.TOP)
+        y_after_left = pdf.get_y()
+        pdf.set_xy(margin + left_w, y0)
+        set_font("I", 8.0, muted)
+        pdf.multi_cell(epw - left_w, 5.0, right_s, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="R")
+        pdf.set_y(max(pdf.get_y(), y_after_left))
 
     def subline(left: str, right: str = ""):
+        left_s = clean_text(left)
+        right_s = clean_text(right)
         set_font("I", 8.0, muted)
-        pdf.cell(epw * 0.72, 4.0, clean_text(left), new_x=XPos.RIGHT, new_y=YPos.TOP)
-        if right:
-            pdf.cell(epw * 0.28, 4.0, clean_text(right), new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="R")
-        else:
-            pdf.ln(4.0)
+        if not right_s:
+            pdf.multi_cell(epw, 4.0, left_s, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+            return
+        left_w = epw * 0.68
+        y0 = pdf.get_y()
+        pdf.multi_cell(left_w, 4.0, left_s, new_x=XPos.RIGHT, new_y=YPos.TOP)
+        y_after_left = pdf.get_y()
+        pdf.set_xy(margin + left_w, y0)
+        pdf.multi_cell(epw - left_w, 4.0, right_s, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="R")
+        pdf.set_y(max(pdf.get_y(), y_after_left))
 
     def compact_row(label: str, value: Any):
         value_s = clean_text(value)
@@ -155,10 +191,10 @@ def generate_pdf_cv(cv_data: Dict[str, Any], filename: str = None) -> str:
     datacamp = _link_label(cv_data.get("datacamp", ""))
 
     set_font("B", 21.5, dark)
-    pdf.cell(epw, 9, name, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+    pdf.multi_cell(epw, 9, name, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
     if headline:
         set_font("B", 10.4, accent)
-        pdf.cell(epw, 5.2, headline, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+        pdf.multi_cell(epw, 5.2, headline, new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
 
     contacts = [item for item in (location, phone, email) if item]
     if contacts:

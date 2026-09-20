@@ -58,12 +58,12 @@ from langgraph.graph.message import add_messages
 from langgraph.prebuilt import InjectedState, ToolNode
 from langgraph.types import Command, interrupt
 
-import cv_generator
-import hr_review
 import jobs as job_source
-import matching
+import pipeline
 import store
+from candidate import canonical_payload, list_variant_catalog, load_identity
 from llm_preflight import resolve_model
+from validator import PipelineError
 from config import (
     DATA_DIR,
     LLM_API_KEY,
@@ -82,9 +82,7 @@ from config import (
 DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 
 EDITABLE_PROFILE_FIELDS = {
-    "name", "headline", "location", "phone", "email", "linkedin", "github",
-    "summary", "target_roles", "experience", "projects", "skills",
-    "skills_categories", "education", "certifications", "languages",
+    "name", "location", "phone", "email", "linkedin", "github", "datacamp",
 }
 
 
@@ -94,12 +92,28 @@ EDITABLE_PROFILE_FIELDS = {
 
 
 class JobContext(TypedDict, total=False):
-    """Precondition tracking for whichever job is currently in play."""
+    """Pipeline state for the job currently in play."""
 
     job_url: str
     job_text: str
-    score: Dict[str, Any]
+    job_text_chars: int
+    job_text_truncated: bool
+    role_hint: str
+    company_hint: str
+    stage: str
+    analysis: Dict[str, Any]
+    selected_variant: str
+    variant_reasons: List[str]
+    hr_screen: Dict[str, Any]
+    tailoring_brief: Dict[str, Any]
+    selection: Dict[str, Any]
+    tailoring: Dict[str, Any]
+    email: Dict[str, Any]
+    cv_data: Dict[str, Any]
+    pdf_path: str
+    pdf_validation: Dict[str, Any]
     application_built: bool
+    score: Dict[str, Any]
 
 
 class AgentState(TypedDict):

@@ -112,18 +112,15 @@ def update_profile_field(field: str, value: Any) -> Dict[str, Any]:
 def profile_summary_text(profile: Optional[Dict[str, Any]] = None) -> str:
     p = profile if profile is not None else load_profile()
     if not p:
-        return "No profile is set yet."
-    skills = p.get("skills") or []
+        return "No identity profile is set yet."
     lines = [
         f"Name: {p.get('name', '—')}",
-        f"Headline: {p.get('headline', '—')}",
         f"Location: {p.get('location', '—')}",
         f"Email: {p.get('email', '—')}",
-        f"Target roles: {', '.join(p.get('target_roles') or []) or '—'}",
-        f"Experience entries: {len(p.get('experience') or [])}",
-        f"Projects: {len(p.get('projects') or [])}",
-        f"Skills on file: {len(skills)}",
-        f"Certifications: {len(p.get('certifications') or [])}",
+        f"Phone: {p.get('phone', '—')}",
+        f"LinkedIn: {p.get('linkedin', '—')}",
+        f"GitHub: {p.get('github', '—')}",
+        "Career facts: canonical CV variants in cv_variants.json (ai, bi, data_analyst, data_scientist).",
     ]
     return "\n".join(lines)
 
