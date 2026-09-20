@@ -27,16 +27,6 @@ class PipelineError(Exception):
         return {"ok": False, "code": self.code, "error": self.message}
 
 
-def _uniq(seq: List[str]) -> List[str]:
-    seen = set()
-    out = []
-    for item in seq:
-        if item and item not in seen:
-            seen.add(item)
-            out.append(item)
-    return out
-
-
 def validate_selection(selection: Dict[str, Any], variant: Dict[str, Any]) -> Dict[str, Any]:
     exp_ids = set(experience_by_id(variant))
     proj_ids = set(projects_by_id(variant))
@@ -61,15 +51,23 @@ def validate_selection(selection: Dict[str, Any], variant: Dict[str, Any]) -> Di
             "invalid_ids": invalid,
         }
 
-    cleaned = {
-        "selected_project_ids": _uniq(raw_proj),
-        "selected_experience_ids": _uniq(raw_exp),
-        "selected_skill_categories": _uniq(raw_cats),
-        "selected_certification_ids": _uniq(raw_certs),
+    groups = {
+        "project": raw_proj,
+        "experience": raw_exp,
+        "skill category": raw_cats,
+        "certification": raw_certs,
     }
-    return {"ok": True, "selection": cleaned, "dropped_duplicates": {
-        "projects": len(raw_proj) - len(cleaned["selected_project_ids"]),
-        "experience": len(raw_exp) - len(cleaned["selected_experience_ids"]),
+    duplicates = [
+        f"{label} ID {value}" for label, values in groups.items()
+        for value in set(values) if values.count(value) > 1
+    ]
+    if duplicates:
+        return {"ok": False, "code": "DUPLICATE_SELECTION_ID", "error": "Duplicate canonical IDs: " + ", ".join(sorted(duplicates)), "duplicates": duplicates}
+    return {"ok": True, "selection": {
+        "selected_project_ids": raw_proj,
+        "selected_experience_ids": raw_exp,
+        "selected_skill_categories": raw_cats,
+        "selected_certification_ids": raw_certs,
     }}
 
 
@@ -90,6 +88,39 @@ def _tech_mentions(text: str) -> Set[str]:
 
 def _allowed_corpus(variant: Dict[str, Any], extra: str = "") -> str:
     return variant_corpus(variant) + " " + (extra or "")
+
+
+def _unsupported_claims(text: str, variant: Dict[str, Any], local_source: str = "") -> List[str]:
+    """Conservative deterministic checks for common high-risk factual claims.
+
+    This is intentionally not semantic fact verification. It catches explicit
+    employers, roles, certifications, years, team/client-management, and
+    outcome claims when their phrase is absent from canonical evidence.
+    """
+    source = _allowed_corpus(variant, local_source).lower()
+    value = (text or "").lower()
+    issues: List[str] = []
+    for pattern, label in (
+        (r"\b(?:worked|working|employed)\s+(?:at|for)\s+([A-Z][\w.& -]{2,})", "employer"),
+        (r"\bat\s+([A-Z][\w.& -]{2,})", "employer"),
+        (r"\b(?:as|title of)\s+(?:a |an )?([A-Z][A-Za-z /-]{2,})", "job title"),
+        (r"\b(?:certified|certification(?: in)?|certificate(?: in)?)\s+([A-Z][\w .+-]{2,})", "certification"),
+    ):
+        for match in re.finditer(pattern, text or ""):
+            phrase = match.group(1).strip().lower()
+            if phrase and phrase not in source:
+                issues.append(f"unsupported {label} {match.group(1).strip()}")
+    for match in re.finditer(r"\b(\d+)\+?\s+years?\b", value):
+        if match.group(0) not in source:
+            issues.append(f"unsupported years claim {match.group(0)}")
+    for pattern, label in (
+        (r"\b(?:led|managed|supervised)\s+(?:a\s+)?team\s+of\s+\d+", "team-size responsibility"),
+        (r"\bmanaged\s+(?:enterprise|key|strategic)\s+clients?", "client-management responsibility"),
+        (r"\b(?:increased|reduced|improved|saved|generated)\b", "achievement"),
+    ):
+        if re.search(pattern, value) and not re.search(pattern, source):
+            issues.append(f"unsupported {label}")
+    return issues
 
 
 def validate_tailoring(tailoring: Dict[str, Any], variant: Dict[str, Any], job_text: str = "") -> Dict[str, Any]:
@@ -115,6 +146,8 @@ def validate_tailoring(tailoring: Dict[str, Any], variant: Dict[str, Any], job_t
             issues.append(f"{label}: invented metric {metric}")
         for tech in _tech_mentions(text) - source_tech:
             issues.append(f"{label}: unsupported technology {tech}")
+        for claim in _unsupported_claims(text, variant, local_source):
+            issues.append(f"{label}: {claim}")
 
     check_text("headline", headline)
     check_text("summary", summary, variant.get("summary") or "")
@@ -133,8 +166,8 @@ def validate_tailoring(tailoring: Dict[str, Any], variant: Dict[str, Any], job_t
                 continue
             check_text(f"experience {ident}", text, src_text)
             cleaned.append(text)
-        if len(cleaned) > len(src.get("bullets") or []):
-            issues.append(f"experience {ident}: extra bullets beyond canonical count")
+        if len(cleaned) != len(src.get("bullets") or []):
+            issues.append(f"experience {ident}: bullet count must match canonical count")
         cleaned_exp[ident] = cleaned
 
     cleaned_proj: Dict[str, List[str]] = {}
@@ -153,8 +186,8 @@ def validate_tailoring(tailoring: Dict[str, Any], variant: Dict[str, Any], job_t
                 continue
             check_text(f"project {ident}", text, src_text)
             cleaned.append(text)
-        if len(cleaned) > len(src.get("bullets") or []):
-            issues.append(f"project {ident}: extra bullets beyond canonical count")
+        if len(cleaned) != len(src.get("bullets") or []):
+            issues.append(f"project {ident}: bullet count must match canonical count")
         cleaned_proj[ident] = cleaned
 
     if issues:
@@ -173,18 +206,6 @@ def validate_tailoring(tailoring: Dict[str, Any], variant: Dict[str, Any], job_t
     }
 
 
-def _clean_email_body(text: str) -> str:
-    text = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
-    text = text.replace("\u00a0", " ")
-    text = re.sub(r"\\?\*\*(.*?)\\?\*\*", r"\1", text)
-    text = re.sub(r"(?m)^\s*#{1,6}\s*", "", text)
-    text = re.sub(r"(?m)^\s*[-*+]\s+", "", text)
-    text = text.replace(r"\**", "").replace("**", "")
-    text = re.sub(r"\\([*#_\[\]()])", r"\1", text)
-    paragraphs = [re.sub(r"[ \t]+", " ", p).strip() for p in re.split(r"\n\s*\n+", text)]
-    return "\n\n".join(p for p in paragraphs if p).strip()
-
-
 def validate_email(
     email: Dict[str, Any],
     variant: Dict[str, Any],
@@ -192,7 +213,7 @@ def validate_email(
     job_text: str = "",
 ) -> Dict[str, Any]:
     subject = str(email.get("subject") or "").strip()
-    body = _clean_email_body(email.get("body") or "")
+    body = str(email.get("body") or "").replace("\r\n", "\n").replace("\r", "\n").strip()
     issues: List[str] = []
     if not subject:
         issues.append("Missing email subject")
@@ -205,19 +226,22 @@ def validate_email(
         issues.append("Email still has markdown/bullets — plain text only")
     if HYPE_RE.search(body):
         issues.append("Email uses hype phrases")
-    allowed = _allowed_corpus(variant, job_text)
+    # The JD can explain relevance but is never evidence that the candidate
+    # possesses a skill or achievement.
+    allowed = _allowed_corpus(variant)
     extra_metrics = _metrics(body) - _metrics(allowed)
     if extra_metrics:
         issues.append(f"Email invented metrics: {sorted(extra_metrics)[:5]}")
     extra_tech = _tech_mentions(body) - _tech_mentions(allowed)
     if extra_tech:
         issues.append(f"Email unsupported technologies: {sorted(extra_tech)[:5]}")
+    issues.extend(f"Email {claim}" for claim in _unsupported_claims(body, variant))
     if issues:
         return {"ok": False, "code": "EMAIL_VALIDATION_FAILED", "error": "; ".join(issues), "issues": issues}
-    cleaned = dict(email)
-    cleaned["subject"] = subject[:80]
-    cleaned["body"] = body
-    return {"ok": True, "email": cleaned}
+    accepted = dict(email)
+    accepted["subject"] = subject
+    accepted["body"] = body
+    return {"ok": True, "email": accepted}
 
 
 def extract_pdf_text(pdf_path: str) -> str:

@@ -35,10 +35,10 @@ class Stage(IntEnum):
     SELECTION_VALIDATED = 6
     TAILORING_GENERATED = 7
     TAILORING_VALIDATED = 8
-    EMAIL_GENERATED = 9
-    EMAIL_VALIDATED = 10
-    PDF_GENERATED = 11
-    PDF_VALIDATED = 12
+    PDF_GENERATED = 9
+    PDF_VALIDATED = 10
+    EMAIL_GENERATED = 11
+    EMAIL_VALIDATED = 12
     READY_TO_SEND = 13
 
 
@@ -193,7 +193,7 @@ def apply_tailoring(job: Dict[str, Any], tailoring: Dict[str, Any]) -> Dict[str,
 
 
 def apply_email(job: Dict[str, Any], email: Dict[str, Any], identity: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    err = require_stage(job, Stage.TAILORING_VALIDATED)
+    err = require_stage(job, Stage.PDF_VALIDATED)
     if err:
         raise PipelineError("MISSING_REQUIRED_STAGE", err)
     identity = identity or load_identity()
@@ -324,18 +324,13 @@ def build_pdf(job: Dict[str, Any], identity: Optional[Dict[str, str]] = None) ->
     if not result["ok"]:
         raise PipelineError(result.get("code") or "PDF_CONTENT_MISMATCH", result.get("error") or "PDF failed")
     job["stage"] = Stage.PDF_VALIDATED.name
-    if current_stage(job) >= Stage.EMAIL_VALIDATED or (job.get("email") or {}).get("body"):
-        if job.get("email_validation", {}).get("ok"):
-            job["stage"] = Stage.READY_TO_SEND.name
-            job["application_built"] = True
-    else:
-        job["application_built"] = True
+    job["application_built"] = True
     _log_stage(job, extra=f"pdf={pdf_path}")
     return job
 
 
 def mark_ready_if_complete(job: Dict[str, Any]) -> Dict[str, Any]:
-    if current_stage(job) >= Stage.PDF_VALIDATED and job.get("email_validation", {}).get("ok"):
+    if job.get("pdf_validation", {}).get("ok") and job.get("email_validation", {}).get("ok"):
         job["stage"] = Stage.READY_TO_SEND.name
         job["application_built"] = True
     return job

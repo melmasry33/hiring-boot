@@ -1,54 +1,13 @@
-"""
-graph_agent.py — LangGraph hiring agent (CV writer + HR screener).
-
-WHY THIS EXISTS
-----------------
-The old loop (agent.py) trusted the model to remember a long system prompt
-and call tools in the right order every time: read the job, THEN score it,
-THEN build the CV, THEN ask to send. When the model skipped a step —
-built a CV without reading the posting, tried to send before building —
-nothing stopped it. That's not a framework problem, it's a missing-guardrail
-problem: a longer prompt does not make a model more reliable at sequencing.
-
-This version is the SAME agent surface — one LLM, tools the model chooses —
-but the risky tools enforce their own preconditions in code:
-
-    read_job | ingest_job_text  →  score_match  →  build_application  →  send_email
-
-  - score_match / hr_screen refuse until a job is loaded (URL or pasted text).
-  - build_application refuses until score_match has scored THAT job.
-  - send_email refuses until build_application produced a draft for that job.
-
-A blocked call doesn't crash — it returns a plain error message as the tool
-result. The model sees it on the next step and corrects itself.
-
-WHAT THE FRAMEWORK GENUINELY BUYS US:
-
-  1. Real persistence via LangGraph checkpointer (SQLite / Postgres).
-  2. send_email is a genuine interrupt() for human Approve/Reject.
-
-PERSONA: dual senior team — professional CV writer + HR recruiter screen —
-aimed at getting the candidate real interviews without inventing facts.
-"""
-
+"""Production LangGraph surface for the staged canonical CV pipeline."""
 from __future__ import annotations
 
-import asyncio
 import json
 import os
-import re
 import time
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Dict, List, Optional, TypedDict
 
-from langchain_core.messages import (
-    AIMessage,
-    BaseMessage,
-    HumanMessage,
-    RemoveMessage,
-    SystemMessage,
-    ToolMessage,
-)
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import InjectedToolCallId, tool
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
@@ -62,38 +21,15 @@ import jobs as job_source
 import pipeline
 import store
 from candidate import canonical_payload, list_variant_catalog, load_identity
-from llm_preflight import resolve_model
+from config import (DATA_DIR, LLM_API_KEY, LLM_BASE_URL, LLM_MAX_RETRIES, LLM_MAX_TOKENS,
+                    LLM_MODEL, LLM_MODEL_CHAIN, LLM_TEMPERATURE, LLM_TIMEOUT,
+                    MAX_HISTORY_MESSAGES, MAX_TOOL_STEPS, logger)
 from validator import PipelineError
-from config import (
-    DATA_DIR,
-    LLM_API_KEY,
-    LLM_BASE_URL,
-    LLM_MAX_RETRIES,
-    LLM_MAX_TOKENS,
-    LLM_MODEL,
-    LLM_MODEL_CHAIN,
-    LLM_TEMPERATURE,
-    LLM_TIMEOUT,
-    MAX_HISTORY_MESSAGES,
-    MAX_TOOL_STEPS,
-    logger,
-)
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
-
-EDITABLE_PROFILE_FIELDS = {
-    "name", "location", "phone", "email", "linkedin", "github", "datacamp",
-}
-
-
-# ---------------------------------------------------------------------------
-# Graph state
-# ---------------------------------------------------------------------------
+EDITABLE_PROFILE_FIELDS = {"name", "location", "phone", "email", "linkedin", "github", "datacamp"}
 
 
 class JobContext(TypedDict, total=False):
-    """Pipeline state for the job currently in play."""
-
     job_url: str
     job_text: str
     job_text_chars: int
@@ -112,11 +48,11 @@ class JobContext(TypedDict, total=False):
     cv_data: Dict[str, Any]
     pdf_path: str
     pdf_validation: Dict[str, Any]
+    email_validation: Dict[str, Any]
     application_built: bool
-    score: Dict[str, Any]
 
 
-class AgentState(TypedDict):
+class AgentState(TypedDict, total=False):
     messages: Annotated[List[BaseMessage], add_messages]
     user_id: int
     job: JobContext
@@ -126,1025 +62,261 @@ def _job(state: AgentState) -> JobContext:
     return state.get("job") or {}
 
 
-def _blocked(tool_call_id: str, message: str) -> Command:
-    """A tool refuses to run: hand the model back an error, not a crash."""
-    return Command(
-        update={
-            "messages": [
-                ToolMessage(
-                    content=json.dumps({"ok": False, "error": message}),
-                    tool_call_id=tool_call_id,
-                )
-            ]
-        }
-    )
+def _result(call_id: str, payload: Dict[str, Any], job: Optional[JobContext] = None) -> Command:
+    update: Dict[str, Any] = {"messages": [ToolMessage(content=json.dumps(payload, ensure_ascii=False, default=str), tool_call_id=call_id)]}
+    if job is not None:
+        update["job"] = job
+    return Command(update=update)
 
 
-# ---------------------------------------------------------------------------
-# Tools
-# ---------------------------------------------------------------------------
+def _blocked(call_id: str, message: str) -> Command:
+    return _result(call_id, {"ok": False, "error": message})
+
+
+def _failure(call_id: str, exc: PipelineError, job: JobContext) -> Command:
+    return _result(call_id, exc.as_dict(), job)
 
 
 @tool
 def get_profile() -> dict:
-    """Read the candidate's COMPLETE stored profile: every experience entry with
-    full bullets, every project with bullets and tech stack, all skill
-    categories, education and certifications. Call this before writing any CV
-    or email content, and whenever the user asks what you know about them."""
-    return store.load_profile() or {"error": "No profile stored yet."}
+    """Return contact metadata and available canonical variants, never a career-profile blob."""
+    return {"ok": True, "identity": load_identity(), "variants": list_variant_catalog()}
+
+
+@tool
+def get_candidate_payload(
+    state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Command:
+    """Return selected CV facts, with canonical IDs, only after variant analysis."""
+    job = _job(state)
+    if pipeline.require_stage(job, pipeline.Stage.VARIANT_SELECTED):
+        return _blocked(tool_call_id, "Analyze the job first; no canonical variant is selected.")
+    return _result(tool_call_id, {"ok": True, "candidate": canonical_payload(job["selected_variant"])})
 
 
 @tool
 def update_profile(field: str, value_json: str) -> dict:
-    """Permanently update one field of the stored profile — use when the user
-    tells you something new about themselves (a new project, a new job, a
-    corrected phone number, an extra skill). Read the profile first so you
-    write back the full corrected value, not a fragment.
-
-    field: one of name, headline, location, phone, email, linkedin, github,
-        summary, target_roles, experience, projects, skills,
-        skills_categories, education, certifications, languages.
-    value_json: the complete new value, JSON-encoded. A string field takes
-        "\\"text\\"", a list field takes the full JSON array (the whole list,
-        including items that are not changing).
-    """
-    field = (field or "").strip()
+    """Update contact metadata only; career facts are authored in cv_variants.json."""
     if field not in EDITABLE_PROFILE_FIELDS:
-        return {"ok": False, "error": f"'{field}' is not editable. Allowed: {sorted(EDITABLE_PROFILE_FIELDS)}"}
+        return {"ok": False, "error": f"Only identity fields are editable: {sorted(EDITABLE_PROFILE_FIELDS)}"}
     try:
-        value = json.loads(value_json) if isinstance(value_json, str) else value_json
+        value = json.loads(value_json)
     except json.JSONDecodeError:
         value = value_json
     store.update_profile_field(field, value)
-    return {"ok": True, "field": field, "message": "Profile updated and saved."}
+    return {"ok": True, "field": field}
 
 
 @tool
-async def search_jobs(
-    keywords: str,
-    location: str = "Egypt",
-    limit: int = 10,
-    remote_only: bool = False,
-    posted_within_days: int = 0,
-) -> Any:
-    """Search LinkedIn's public job feed for openings. Use when the user asks you
-    to find jobs rather than handing you one. Returns titles, companies and
-    links but no descriptions — call read_job on anything promising."""
-    return await job_source.search_linkedin_jobs(
-        keywords=keywords,
-        location=location or "Egypt",
-        limit=min(int(limit or 10), 25),
-        remote_only=bool(remote_only),
-        posted_within_days=int(posted_within_days or 0),
-    )
+async def search_jobs(keywords: str, location: str = "Egypt", limit: int = 10, remote_only: bool = False, posted_within_days: int = 0) -> Any:
+    """Search job listings; read a chosen job before screening it."""
+    return await job_source.search_linkedin_jobs(keywords, location or "Egypt", min(int(limit or 10), 25), bool(remote_only), int(posted_within_days or 0))
 
 
 @tool
-async def read_job(
-    url: str,
-    state: Annotated[AgentState, InjectedState],
-    tool_call_id: Annotated[str, InjectedToolCallId],
-) -> Command:
-    """Read the full text of a job posting from its URL (LinkedIn or any other
-    job board). Always call this when the user sends a link instead of
-    guessing from the URL. Also reports any contact emails found in the post.
-    This (or ingest_job_text) is required before score_match / hr_screen /
-    build_application."""
+async def read_job(url: str, state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:
+    """Fetch full job text and create canonical JOB_INGESTED pipeline state."""
     result = await job_source.get_linkedin_job(url)
     text = result.get("description") or result.get("text") or ""
-    new_job: JobContext = {
-        "job_url": url,
-        "job_text": text,
-        "score": {},
-        "application_built": False,
-    }
-    return Command(
-        update={
-            "job": new_job,
-            "messages": [
-                ToolMessage(
-                    content=json.dumps(result, ensure_ascii=False, default=str)[:12000],
-                    tool_call_id=tool_call_id,
-                )
-            ],
-        }
-    )
+    if len(text.strip()) < 40:
+        return _blocked(tool_call_id, "Could not obtain enough job text. Paste the full description.")
+    job = pipeline.ingest_job(text, url, result.get("title") or "", result.get("company") or "")
+    return _result(tool_call_id, {"ok": True, "stage": job["stage"], "job_text_chars": job["job_text_chars"], "job_text_truncated": False, "contacts": result.get("emails") or []}, job)
 
 
 @tool
 def ingest_job_text(
-    job_text: str,
-    state: Annotated[AgentState, InjectedState],
-    tool_call_id: Annotated[str, InjectedToolCallId],
-    job_url: str = "",
-    role_hint: str = "",
-    company_hint: str = "",
+    job_text: str, state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId],
+    job_url: str = "", role_hint: str = "", company_hint: str = "",
 ) -> Command:
-    """Load a pasted job description into the current job context. Use this
-    whenever the user pastes JD text (or LinkedIn blocks the server from
-    reading a URL). Prefer this over inventing job content from memory.
-    After ingesting, call score_match then hr_screen before building a CV.
-
-    job_text: the full pasted posting (requirements + responsibilities).
-    job_url: optional source URL if known.
-    role_hint / company_hint: optional title and company if obvious from context.
-    """
-    text = (job_text or "").strip()
-    if len(text) < 40:
-        return _blocked(
-            tool_call_id,
-            "Job text is too short to screen. Paste the full posting "
-            "(responsibilities + requirements), not just the title.",
-        )
-    # Cap stored text so tool messages stay within context.
-    stored = text[:14000]
-    new_job: JobContext = {
-        "job_url": (job_url or "").strip(),
-        "job_text": stored,
-        "score": {},
-        "application_built": False,
-    }
-    meta = {
-        "ok": True,
-        "chars": len(stored),
-        "job_url": new_job["job_url"] or None,
-        "role_hint": (role_hint or "").strip() or None,
-        "company_hint": (company_hint or "").strip() or None,
-        "message": "Job text loaded. Next: score_match, then hr_screen, then build_application if applying.",
-    }
-    return Command(
-        update={
-            "job": new_job,
-            "messages": [
-                ToolMessage(
-                    content=json.dumps(meta, ensure_ascii=False),
-                    tool_call_id=tool_call_id,
-                )
-            ],
-        }
-    )
+    """Store a complete pasted JD. Source text is never silently truncated."""
+    if len((job_text or "").strip()) < 40:
+        return _blocked(tool_call_id, "Job text is too short to screen; paste responsibilities and requirements.")
+    job = pipeline.ingest_job(job_text, job_url, role_hint, company_hint)
+    return _result(tool_call_id, {"ok": True, "stage": job["stage"], "job_text_chars": job["job_text_chars"], "job_text_truncated": False}, job)
 
 
 @tool
 async def fetch_url(url: str, reason: str = "") -> Any:
-    """Fetch any other web page as text — a company's about/careers page, a
-    GitHub repo to verify what a project actually contains before claiming it
-    on the CV, a recruiter's post. Not for job postings (use read_job)."""
+    """Fetch a non-job supporting URL as text."""
     return await job_source.fetch_page(url)
 
 
 @tool
-def score_match(
-    state: Annotated[AgentState, InjectedState],
-    tool_call_id: Annotated[str, InjectedToolCallId],
-) -> Command:
-    """Run a deterministic skill/seniority match of the CURRENT job (from
-    read_job or ingest_job_text) against the stored profile. Returns 0-100,
-    matched skills, missing must-haves, and seniority signal. Required before
-    build_application."""
+def analyze_job(state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId], requested_variant: str = "auto") -> Command:
+    """Analyze the full JD and deterministically select its canonical CV variant."""
     job = _job(state)
-    job_text = job.get("job_text")
-    if not job_text:
-        return _blocked(
-            tool_call_id,
-            "No job is loaded. Call read_job (URL) or ingest_job_text (pasted JD) first.",
-        )
-    result = matching.score_job(job_text)
-    new_job: JobContext = {**job, "score": result}
-    return Command(
-        update={
-            "job": new_job,
-            "messages": [ToolMessage(content=json.dumps(result, default=str), tool_call_id=tool_call_id)],
-        }
-    )
-
-
-@tool
-def hr_screen(
-    state: Annotated[AgentState, InjectedState],
-    tool_call_id: Annotated[str, InjectedToolCallId],
-) -> Command:
-    """Run a professional HR / recruiter screen of the CURRENT loaded job vs
-    the candidate profile. Returns apply/stretch/weak/skip verdict, must-have
-    coverage, ATS keywords to echo, deal-breakers, interview risks, and CV
-    rewrite priorities. Call after score_match (or right after loading a job
-    when the user asks 'is this a good fit?' / 'review this as HR'). Do not
-    invent gaps — report only what the screen returns."""
-    job = _job(state)
-    job_text = job.get("job_text")
-    if not job_text:
-        return _blocked(
-            tool_call_id,
-            "No job is loaded. Call read_job or ingest_job_text before hr_screen.",
-        )
-    review = hr_review.hr_screen(job_text)
-    # Attach a chat-ready blurb so the model can quote it accurately.
-    if review.get("ok"):
-        review["chat_summary"] = hr_review.format_hr_review_for_chat(review)
-    # Persist latest HR packet on the job context for later CV guidance.
-    scored = job.get("score") or {}
-    new_job: JobContext = {**job, "score": {**scored, "hr_screen": review}}
-    return Command(
-        update={
-            "job": new_job,
-            "messages": [
-                ToolMessage(
-                    content=json.dumps(review, ensure_ascii=False, default=str)[:12000],
-                    tool_call_id=tool_call_id,
-                )
-            ],
-        }
-    )
-
-
-@tool
-def critique_cv_package(
-    state: Annotated[AgentState, InjectedState],
-    focus: str = "full",
-) -> dict:
-    """Review the staged application draft (CV path + email) the way a hiring
-    manager would in a 60-second pass. Use after build_application when the
-    user asks to critique, improve, or stress-test the package before send.
-
-    focus: "full" | "cv" | "email" | "ats"
-    """
-    draft = store.load_draft(state["user_id"])
-    if not draft:
-        return {
-            "ok": False,
-            "error": "No staged draft. Call build_application first, then critique.",
-        }
-    profile = store.load_profile() or {}
-    focus_n = (focus or "full").strip().lower()
-    issues: List[str] = []
-    strengths: List[str] = []
-    subject = (draft.get("email_subject") or "").strip()
-    body = (draft.get("email_body") or "").strip()
-    gaps = draft.get("gap_notes") or []
-    fit = (draft.get("fit_summary") or "").strip()
-
-    if focus_n in ("full", "email", "ats"):
-        words = len(body.split())
-        if words and (words < 90 or words > 220):
-            issues.append(f"Email length {words} words — target 120–180 for recruiter skim.")
-        if re.search(r"[#*_`]|^\s*[-•]", body, re.M):
-            issues.append("Email still has markdown/bullets — plain text only.")
-        if re.search(r"\b(thrilled|excited|passionate|perfect fit|great fit)\b", body, re.I):
-            issues.append("Email uses hype phrases recruiters discount — rewrite colder and more specific.")
-        if not subject:
-            issues.append("Missing email subject.")
-        elif len(subject) > 80:
-            issues.append("Subject over 80 characters.")
-        else:
-            strengths.append(f"Subject is usable: {subject}")
-        if gaps:
-            strengths.append(f"Gaps were logged honestly ({len(gaps)}).")
-        else:
-            issues.append("No gap_notes recorded — confirm there truly are none before send.")
-
-    if focus_n in ("full", "cv", "ats"):
-        pdf = draft.get("pdf_path") or ""
-        if not pdf or not os.path.exists(pdf):
-            issues.append("CV PDF path missing or file not found.")
-        else:
-            strengths.append(f"CV PDF staged: {os.path.basename(pdf)}")
-        if not fit:
-            issues.append("fit_summary empty — HR needs a one-liner on why this candidate.")
-        role = draft.get("role") or ""
-        company = draft.get("company") or ""
-        if not role or not company:
-            issues.append("Role/company incomplete on the draft.")
-        else:
-            strengths.append(f"Targeting: {role} @ {company}")
-
-    if focus_n in ("full", "ats"):
-        job_url = draft.get("job_url") or ""
-        if job_url:
-            strengths.append(f"Linked to posting: {job_url}")
-
-    verdict = "ready" if len(issues) <= 1 else ("polish" if len(issues) <= 3 else "rework")
-    return {
-        "ok": True,
-        "verdict": verdict,
-        "focus": focus_n,
-        "strengths": strengths,
-        "issues": issues,
-        "hr_one_liner": (
-            "Package is interview-ready."
-            if verdict == "ready"
-            else "Fix the listed issues before Approve — recruiters will bounce on them."
-        ),
-        "draft_role": draft.get("role"),
-        "draft_company": draft.get("company"),
-        "candidate": profile.get("name"),
-    }
-
-
-@tool
-async def build_application(
-    role: str,
-    company: str,
-    fit_summary: str,
-    gap_notes: List[str],
-    headline: str,
-    summary: str,
-    selected_experience: List[dict],
-    selected_projects: List[dict],
-    skills_categories: dict,
-    email_subject: str,
-    email_body: str,
-    state: Annotated[AgentState, InjectedState],
-    tool_call_id: Annotated[str, InjectedToolCallId],
-    job_url: str = "",
-    recruiter_email: str = "",
-    selected_certifications: Optional[List[str]] = None,
-    resume_variant: str = "auto",
-) -> Command:
-    """Produce the tailored application package: generates a real ATS-friendly
-    PDF CV (sent to the user automatically) and stores the email draft.
-    Requires a loaded job (read_job or ingest_job_text) AND score_match for
-    this job — call this only once you have read the profile and the actual
-    job text, run hr_screen for the rewrite brief, and resolved anything
-    ambiguous by asking the user. Select and reorder content for THIS job —
-    do not dump everything.
-
-    role: the exact job title you are applying for. NOT the company name.
-    company: the hiring company's name only.
-    fit_summary: 1-2 honest sentences on fit.
-    gap_notes: real requirements in the posting the profile does NOT cover.
-        Empty only if there genuinely are none. Never hide a gap.
-    headline: max 60 characters, a professional headline for the CV header
-        (e.g. 'Data Engineer - Python, SQL, AI Systems'). NOT the company name.
-    summary: 3-4 sentences, built only from real profile facts.
-    selected_experience: ALL experience entries from the real profile, in the
-        requested display order. Rewrite the existing bullets to emphasize the
-        job, but preserve the number of bullets and never invent achievements.
-    selected_projects: choose the TOP 5 most relevant projects from the selected
-        baseline after comparing the ENTIRE job posting — responsibilities,
-        must-have requirements, preferred requirements, technologies, domain,
-        seniority, and keywords. Return them in relevance order (best first).
-        Rewrite existing bullets for job relevance, but do not invent facts.
-        If the baseline contains fewer than 5 projects, use all available
-        projects.
-    skills_categories: ALL profile skill categories, reordered so job-relevant
-        ones lead; never remove a category or skill.
-    email_subject: max 80 characters.
-    email_body: a polished, human-sounding plain-text application email referencing
-        the SAME selected projects as the CV. Keep it concise: about 120-180 words.
-        Use this structure: natural greeting; one short paragraph stating the role
-        and why the candidate's background is relevant; one short paragraph naming
-        1-2 of the strongest matching projects/experiences with concrete technologies
-        or outcomes from the baseline; one short paragraph connecting that evidence
-        to the company's role/problem; a simple closing with CV-attachment mention;
-        professional sign-off. No headings, no "Why I'm a great fit", no bullets,
-        no emojis, no hype, no generic corporate slogans, no invented personal
-        stories, and no claims that cannot be traced to the selected CV baseline or
-        the job posting. Never write Markdown or literal ** / \\* formatting because
-        the email is sent as plain text.
-    resume_variant: "auto" or one of "ai", "bi", "data_analyst", "data_scientist".
-        Prefer "auto" unless the role clearly identifies the family. The selected
-        baseline is a complete user-authored CV; never switch facts between baselines.
-    recruiter_email: leave empty if genuinely unknown.
-    """
-    job = _job(state)
-    if not job.get("job_text"):
-        return _blocked(tool_call_id, "No job is loaded. Call read_job or ingest_job_text first.")
-    if not job.get("score"):
-        return _blocked(tool_call_id, "This job hasn't been scored yet. Call score_match first.")
-
-    user_id = state["user_id"]
-    profile = store.load_profile()
-
-    # Four user-authored CV baselines live in data/cv_variants.json. The
-    # selected baseline determines facts, sections and original paragraphs;
-    # tailoring may only rewrite/reorder those existing paragraphs.
-    variants_path = DATA_DIR / "cv_variants.json"
     try:
-        variants = json.loads(variants_path.read_text(encoding="utf-8"))
-    except Exception as exc:
-        return _blocked(tool_call_id, f"CV baseline file could not be loaded: {exc}")
-
-    def _norm(value: Any) -> str:
-        return re.sub(r"\s+", " ", str(value or "").strip().lower())
-
-    def _auto_variant(role_text: str, job_text: str) -> str:
-        hay = _norm(role_text + " " + job_text)
-        if any(k in hay for k in ("power bi", "business intelligence", "bi developer", "dax", "power query", "reporting developer", "bi analyst")):
-            return "bi"
-        if any(k in hay for k in ("data scientist", "machine learning engineer", "ml engineer", "machine learning", "deep learning", "computer vision", "pytorch", "tensorflow", "applied scientist")):
-            return "data_scientist"
-        if any(k in hay for k in ("data analyst", "business analyst", "product analytics", "operations analytics", "supply chain", "tableau", "analytics analyst")):
-            return "data_analyst"
-        return "ai"
-
-    requested_variant = _norm(resume_variant).replace("-", "_").replace(" ", "_")
-    variant_aliases = {
-        "dataanalysis": "data_analyst",
-        "data_analysis": "data_analyst",
-        "dataanalyst": "data_analyst",
-        "datascience": "data_scientist",
-        "datascientist": "data_scientist",
-        "machine_learning": "data_scientist",
-        "ml": "data_scientist",
-        "powerbi": "bi",
-        "business_intelligence": "bi",
-        "ai_ml": "ai",
-        "llm": "ai",
-        "agentic": "ai",
-    }
-    requested_variant = variant_aliases.get(requested_variant, requested_variant)
-    variant_key = requested_variant if requested_variant in variants else _auto_variant(role, job.get("job_text", ""))
-    variant = variants[variant_key]
-
-    variant_experience = variant.get("experience") or []
-    variant_projects = variant.get("projects") or []
-    variant_certs = variant.get("certifications") or []
-
-    def _merge_bullets(source: dict, drafted: dict) -> List[str]:
-        original = list(source.get("bullets") or [])
-        proposed = [str(x).strip() for x in (drafted.get("bullets") or []) if str(x).strip()]
-        # Tailor existing paragraphs, but never delete one or create extra ones.
-        merged = []
-        for i, original_text in enumerate(original):
-            merged.append(proposed[i] if i < len(proposed) else original_text)
-        return merged
-
-    def _canonical_experience(items: List[dict]) -> List[dict]:
-        ordered: List[dict] = []
-        used = set()
-        for item in items or []:
-            if not isinstance(item, dict):
-                continue
-            role = _norm(item.get("role"))
-            company = _norm(item.get("company"))
-            match = next(
-                (
-                    src for idx, src in enumerate(variant_experience)
-                    if idx not in used and (
-                        _norm(src.get("role")) == role
-                        or (
-                            company
-                            and _norm(src.get("company")) == company
-                            and role in _norm(src.get("role"))
-                        )
-                    )
-                ),
-                None,
-            )
-            if match is not None:
-                idx = variant_experience.index(match)
-                used.add(idx)
-                merged = dict(match)
-                merged["bullets"] = _merge_bullets(match, item)
-                ordered.append(merged)
-
-        for idx, src in enumerate(variant_experience):
-            if idx not in used:
-                ordered.append(dict(src))
-        return ordered
-
-    def _canonical_projects(items: List[dict]) -> List[dict]:
-        ordered: List[dict] = []
-        used = set()
-
-        # The LLM supplies the relevance ranking. We preserve that ranking,
-        # canonicalize every selected project against the user's baseline, and
-        # then hard-cap the final CV at the top five.
-        for item in items or []:
-            if not isinstance(item, dict):
-                continue
-            name = _norm(item.get("name"))
-            match = next(
-                (src for idx, src in enumerate(variant_projects) if idx not in used and _norm(src.get("name")) == name),
-                None,
-            )
-            if match is not None:
-                idx = variant_projects.index(match)
-                used.add(idx)
-                merged = dict(match)
-                merged["bullets"] = _merge_bullets(match, item)
-                ordered.append(merged)
-
-        # If the model returned fewer than five valid project names, fill the
-        # remaining slots from the untouched baseline in its original order.
-        # This guarantees a stable <=5-project CV without inventing content.
-        if len(ordered) < min(5, len(variant_projects)):
-            for idx, src in enumerate(variant_projects):
-                if idx not in used:
-                    ordered.append(dict(src))
-                if len(ordered) >= 5:
-                    break
-
-        return ordered[:5]
-
-    def _clean_email_body(text: str) -> str:
-        """Normalize the LLM draft into clean plain-text application email."""
-        text = str(text or "").replace("\r\n", "\n").replace("\r", "\n")
-        text = text.replace("\u00a0", " ")
-        text = re.sub(r"\\?\*\*(.*?)\\?\*\*", r"\1", text)
-        text = re.sub(r"(?m)^\s*#{1,6}\s*", "", text)
-        text = re.sub(r"(?m)^\s*[-*+]\s+", "", text)
-        text = text.replace(r"\**", "").replace("**", "")
-        text = re.sub(r"\\([*#_\[\]()])", r"\1", text)
-        paragraphs = [re.sub(r"[ \t]+", " ", p).strip() for p in re.split(r"\n\s*\n+", text)]
-        paragraphs = [p for p in paragraphs if p]
-        return "\n\n".join(paragraphs).strip()
-
-    def _canonical_certifications(items: Optional[List[str]]) -> List[str]:
-        requested = [_norm(x) for x in (items or [])]
-        ordered: List[str] = []
-        used = set()
-        for wanted in requested:
-            for idx, src in enumerate(variant_certs):
-                if idx not in used and _norm(src) == wanted:
-                    ordered.append(src)
-                    used.add(idx)
-                    break
-        # Never delete certifications; requested order only affects prominence.
-        ordered.extend(src for idx, src in enumerate(variant_certs) if idx not in used)
-        return ordered
-
-    # Reorder categories according to the model's requested order, but retain
-    # every category and every skill from the selected CV baseline.
-    variant_skill_categories = variant.get("skills_categories") or {}
-    ordered_skill_categories: Dict[str, List[str]] = {}
-    for key in (skills_categories or {}).keys():
-        if key in variant_skill_categories and key not in ordered_skill_categories:
-            ordered_skill_categories[key] = list(variant_skill_categories[key])
-    for key, values in variant_skill_categories.items():
-        if key not in ordered_skill_categories:
-            ordered_skill_categories[key] = list(values)
-
-    canonical_projects = _canonical_projects(selected_projects)
-    if len(variant_projects) >= 5 and len(canonical_projects) < 5:
-        return _blocked(
-            tool_call_id,
-            "Project selection was incomplete. Re-run build_application and provide "
-            "exactly 5 valid projects from the selected CV baseline, ranked by the "
-            "entire job posting. Do not substitute arbitrary baseline projects."
-        )
-
-    cv_data = {
-        "name": profile.get("name", ""),
-        "headline": (headline or variant.get("headline") or profile.get("headline", "")).strip(),
-        "summary": (summary or variant.get("summary") or profile.get("summary", "")).strip(),
-        "location": profile.get("location", ""),
-        "phone": profile.get("phone", ""),
-        "email": profile.get("email", ""),
-        "linkedin": profile.get("linkedin", ""),
-        "github": profile.get("github", ""),
-        "datacamp": profile.get("datacamp", ""),
-        "experience": _canonical_experience(selected_experience),
-        "projects": canonical_projects,
-        "education": variant.get("education", []),
-        "certifications": _canonical_certifications(selected_certifications or variant.get("certifications", [])),
-        "training": variant.get("training", []),
-        "languages": variant.get("languages", []),
-        "military_service": variant.get("additional_information") or profile.get("military_service", ""),
-        "skills_categories": ordered_skill_categories or variant_skill_categories,
-    }
-    # The generated CV filename should identify the candidate and target role,
-    # not the company, so the file remains reusable and professional.
-    safe = "".join(c if c.isalnum() else "_" for c in f"{profile.get('name','CV')}_{role}")[:60]
-    pdf_path = cv_generator.generate_pdf_cv(cv_data, filename=f"{safe}.pdf")
-
-    cleaned_email_body = _clean_email_body(email_body)
-    draft = {
-        "role": role,
-        "company": company,
-        "job_url": job_url or job.get("job_url", ""),
-        "recruiter_email": (recruiter_email or "").strip(),
-        "email_subject": (email_subject or "")[:80],
-        "email_body": cleaned_email_body,
-        "pdf_path": pdf_path,
-        "fit_summary": fit_summary,
-        "gap_notes": gap_notes or [],
-        "created_at": time.time(),
-    }
-    store.save_draft(user_id, draft)
-
-    new_job: JobContext = {**job, "application_built": True}
-    result = {
-        "ok": True,
-        "cv_generated": True,
-        "cv_file": pdf_path,
-        "resume_variant": variant_key,
-        "message": (
-            "The tailored CV PDF has been sent to the user in this chat and the email "
-            "draft is staged. Summarise the fit and the gaps in your reply, show the "
-            "email subject and body, and tell them to approve sending or give you a "
-            "recruiter address. Do not re-paste the CV contents."
-        ),
-        "draft_subject": draft["email_subject"],
-        "draft_recruiter_email": draft["recruiter_email"] or None,
-        "selected_projects": [p.get("name") for p in cv_data.get("projects", [])],
-        # Consumed by run_turn to attach the PDF to this turn's reply.
-        "_attachment": {"path": pdf_path, "caption": f"Tailored CV [{variant_key}] — {role} at {company}"},
-    }
-    return Command(
-        update={
-            "job": new_job,
-            "messages": [ToolMessage(content=json.dumps(result, ensure_ascii=False, default=str)[:12000], tool_call_id=tool_call_id)],
-        }
-    )
+        pipeline.analyze_and_select_variant(job, requested_variant)
+    except PipelineError as exc:
+        return _failure(tool_call_id, exc, job)
+    return _result(tool_call_id, {"ok": True, "stage": job["stage"], "selected_variant": job["selected_variant"], "analysis": job["analysis"], "variant_reasons": job["variant_reasons"]}, job)
 
 
 @tool
-def send_email(
-    state: Annotated[AgentState, InjectedState],
-    tool_call_id: Annotated[str, InjectedToolCallId],
-    to: str = "",
-    subject: str = "",
-    body: str = "",
-) -> Command:
-    """Request to send the current application email with the tailored CV
-    attached. This does NOT send immediately — it pauses for human approval.
-    Requires build_application to have already run for this job. Never claim
-    an email was sent until this tool's result says so."""
+def score_match(state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:
+    """Compatibility name for analyze_job; production matching is matcher.py via pipeline."""
+    return analyze_job.func(state, tool_call_id, "auto")
+
+
+@tool
+def hr_screen(state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:
+    """Screen the selected variant and produce a relevance-ranked tailoring brief."""
     job = _job(state)
-    if not job.get("application_built"):
-        return _blocked(tool_call_id, "No application has been built yet. Call build_application first.")
-
-    draft = store.load_draft(state["user_id"]) or {}
-    payload = {
-        "to": (to or draft.get("recruiter_email") or "").strip(),
-        "subject": (subject or draft.get("email_subject") or "").strip(),
-        "body": (body or draft.get("email_body") or "").strip(),
-        "pdf_path": draft.get("pdf_path"),
-        "company": draft.get("company", ""),
-        "role": draft.get("role", ""),
-        "job_url": draft.get("job_url", ""),
-    }
-    # Pauses the graph here. The checkpointer persists this exact point, so
-    # even a restart before the human taps a button loses nothing. bot.py
-    # resumes with Command(resume={"sent": bool, ...}).
-    decision = interrupt(payload)
-    return Command(
-        update={
-            "messages": [ToolMessage(content=json.dumps(decision, ensure_ascii=False, default=str), tool_call_id=tool_call_id)]
-        }
-    )
+    try:
+        pipeline.run_hr_screen(job)
+    except PipelineError as exc:
+        return _failure(tool_call_id, exc, job)
+    return _result(tool_call_id, {"ok": True, "stage": job["stage"], "review": job["hr_screen"], "tailoring_brief": job["tailoring_brief"]}, job)
 
 
 @tool
-def track_application(
-    company: str,
-    role: str,
-    status: str,
-    job_url: str = "",
-    notes: str = "",
-    match_score: Optional[int] = None,
-) -> dict:
-    """Record or update an application in the tracker: company, role, status
-    (drafted / sent / interview / rejected / offer), notes. Keep it current so
-    the user can ask what they applied to and when."""
-    entry = store.log_application(
-        {
-            "company": company,
-            "role": role,
-            "job_url": job_url,
-            "status": status or "drafted",
-            "notes": notes,
-            "match_score": match_score,
-        }
-    )
-    return {"ok": True, "logged": entry}
+def select_evidence(
+    selected_project_ids: List[str], selected_experience_ids: List[str], selected_skill_categories: List[str],
+    state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId],
+    selected_certification_ids: Optional[List[str]] = None,
+) -> Command:
+    """Rank canonical evidence by stable ID. Selection never removes CV content."""
+    job = _job(state)
+    selection = {"selected_project_ids": selected_project_ids or [], "selected_experience_ids": selected_experience_ids or [], "selected_skill_categories": selected_skill_categories or [], "selected_certification_ids": selected_certification_ids or []}
+    try:
+        pipeline.apply_selection(job, selection)
+    except PipelineError as exc:
+        return _failure(tool_call_id, exc, job)
+    return _result(tool_call_id, {"ok": True, "stage": job["stage"], "selection": job["selection"]}, job)
+
+
+@tool
+def generate_tailoring(
+    headline: str, summary: str, rewritten_bullets_by_experience_id: Dict[str, List[str]],
+    rewritten_project_descriptions_by_project_id: Dict[str, List[str]],
+    state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Command:
+    """Validate headline/summary and ID-keyed rewrites. Existing bullet counts must be preserved."""
+    job = _job(state)
+    tailoring = {"headline": headline, "summary": summary, "rewritten_bullets_by_experience_id": rewritten_bullets_by_experience_id or {}, "rewritten_project_descriptions_by_project_id": rewritten_project_descriptions_by_project_id or {}}
+    try:
+        pipeline.apply_tailoring(job, tailoring)
+    except PipelineError as exc:
+        return _failure(tool_call_id, exc, job)
+    return _result(tool_call_id, {"ok": True, "stage": job["stage"], "tailoring": job["tailoring"]}, job)
+
+
+@tool
+def build_pdf(state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:
+    """Assemble all canonical content, render the PDF, and validate extracted text."""
+    job = _job(state)
+    try:
+        pipeline.build_pdf(job)
+    except PipelineError as exc:
+        return _failure(tool_call_id, exc, job)
+    path = job.get("pdf_path") or ""
+    return _result(tool_call_id, {"ok": True, "stage": job["stage"], "cv_file": path, "pdf_validation": job.get("pdf_validation"), "_attachment": {"path": path, "caption": f"Tailored CV [{job.get('selected_variant')}]"}}, job)
+
+
+def _save_pipeline_draft(user_id: int, job: JobContext) -> None:
+    analysis, email = job.get("analysis") or {}, job.get("email") or {}
+    store.save_draft(user_id, {"role": job.get("role_hint") or analysis.get("role") or "", "company": job.get("company_hint") or analysis.get("company") or "", "job_url": job.get("job_url") or "", "recruiter_email": email.get("recruiter_email") or "", "email_subject": email.get("subject") or "", "email_body": email.get("body") or "", "pdf_path": job.get("pdf_path") or "", "fit_summary": email.get("fit_summary") or "", "gap_notes": email.get("gap_notes") or [], "stage": job.get("stage"), "selected_variant": job.get("selected_variant"), "created_at": time.time()})
+
+
+@tool
+def generate_email(
+    subject: str, body: str, fit_summary: str, gap_notes: List[str],
+    state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId], recruiter_email: str = "",
+) -> Command:
+    """Validate raw plain-text email against candidate facts only; invalid markdown is rejected, never repaired."""
+    job = _job(state)
+    try:
+        pipeline.apply_email(job, {"subject": subject, "body": body, "fit_summary": fit_summary, "gap_notes": gap_notes or [], "recruiter_email": recruiter_email})
+        pipeline.mark_ready_if_complete(job)
+    except PipelineError as exc:
+        return _failure(tool_call_id, exc, job)
+    _save_pipeline_draft(state["user_id"], job)
+    return _result(tool_call_id, {"ok": True, "stage": job["stage"], "email": job["email"]}, job)
+
+
+@tool
+def critique_cv_package(state: Annotated[AgentState, InjectedState]) -> dict:
+    """Report validation state for the pipeline-produced draft."""
+    job = _job(state)
+    return {"ok": bool(job.get("application_built")), "stage": job.get("stage"), "pdf_validation": job.get("pdf_validation"), "email_validation": job.get("email_validation"), "gaps": (job.get("email") or {}).get("gap_notes") or []}
+
+
+@tool
+def send_email(state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId], to: str = "") -> Command:
+    """Pause for human approval; requires READY_TO_SEND and never sends itself."""
+    job = _job(state)
+    if pipeline.current_stage(job) != pipeline.Stage.READY_TO_SEND:
+        return _blocked(tool_call_id, "Application is not READY_TO_SEND: validate tailoring, PDF, and email first.")
+    draft = store.load_draft(state["user_id"]) or {}
+    payload = {"to": (to or draft.get("recruiter_email") or "").strip(), "subject": draft.get("email_subject") or "", "body": draft.get("email_body") or "", "pdf_path": draft.get("pdf_path") or "", "company": draft.get("company") or "", "role": draft.get("role") or "", "job_url": draft.get("job_url") or ""}
+    return Command(update={"messages": [ToolMessage(content=json.dumps(interrupt(payload), ensure_ascii=False, default=str), tool_call_id=tool_call_id)]})
+
+
+@tool
+def track_application(company: str, role: str, status: str, job_url: str = "", notes: str = "", match_score: Optional[int] = None) -> dict:
+    """Record an application status in the durable tracker."""
+    return {"ok": True, "logged": store.log_application({"company": company, "role": role, "job_url": job_url, "status": status or "drafted", "notes": notes, "match_score": match_score})}
 
 
 @tool
 def list_applications(limit: int = 20) -> dict:
-    """Read the application history and summary stats. Use for questions like
-    'what have I applied to', 'how many this week', 'did I already apply here'.
-    Always check this before drafting, to avoid applying to the same job twice."""
-    apps = store.load_applications()[-int(limit or 20):]
-    return {
-        "stats": store.application_stats(),
-        "applications": [
-            {
-                "company": a.get("company"),
-                "role": a.get("role"),
-                "status": a.get("status"),
-                "job_url": a.get("job_url"),
-                "match_score": a.get("match_score"),
-                "date": time.strftime("%Y-%m-%d", time.localtime(a.get("created_at", 0))),
-            }
-            for a in apps
-        ],
-    }
+    """List recently tracked applications and aggregate status counts."""
+    return {"stats": store.application_stats(), "applications": store.load_applications()[-int(limit or 20):]}
 
 
 @tool
 def remember(note: str) -> dict:
-    """Store a durable note about the user's preferences or situation — salary
-    floor, willingness to relocate, companies to avoid, tone they like in
-    emails. These are injected into every future conversation."""
-    saved = store.add_note(note)
-    return {"ok": True, "saved": saved["text"]}
+    """Save a durable user preference note."""
+    return {"ok": True, "saved": store.add_note(note)["text"]}
 
 
-TOOLS = [
-    get_profile, update_profile, search_jobs, read_job, ingest_job_text, fetch_url,
-    score_match, hr_screen, build_application, critique_cv_package, send_email,
-    track_application, list_applications, remember,
-]
-INTERRUPTING_TOOLS = {"send_email"}
-
-
-# ---------------------------------------------------------------------------
-# System prompt — dual senior team: CV Writer + HR Recruiter
-# ---------------------------------------------------------------------------
-
-BASE_SYSTEM_PROMPT = """You are a full hiring squad for ONE job seeker — not a chatbot FAQ.
-
-You operate as two senior professionals in one voice:
-
-A) SENIOR CV WRITER (ATS + recruiter-skim specialist)
-   - Tailor a truthful, role-specific CV from the user's authored baselines.
-   - Lead with evidence that maps to the job's must-haves.
-   - Mirror JD language ONLY where the profile truly supports it.
-   - Never invent employers, dates, metrics, tools, degrees, or certifications.
-
-B) SENIOR HR / RECRUITER (screening interviewer)
-   - Judge fit the way a real recruiter would in 90 seconds.
-   - Call out must-have gaps, seniority mismatch, and interview risks honestly.
-   - Recommend apply / stretch / weak / skip — protect the user's time and reputation.
-   - Stress-test the finished CV+email before send (critique_cv_package).
-
-Mission: get this candidate real interviews. Quality over volume. One strong tailored application beats five generic ones.
-
-────────────────────────────────────────
-OPERATING RULES
-────────────────────────────────────────
-
-1. Conversational and direct. Plain text when talking; tools when acting. Short clarifying questions beat confident guesses.
-2. NEVER invent experience, projects, skills, employers, metrics, or certifications. Every CV line must trace to get_profile / the selected CV baseline / something the user said this conversation. Real gaps go in gap_notes.
-3. Always call get_profile before writing CV or email content. Do not rely on memory of an earlier summary.
-4. Job intake:
-   - User sends a URL → read_job.
-   - User pastes a JD → ingest_job_text (full text).
-   - LinkedIn blocks the server → say so and ask for a paste. Never pretend you read it.
-5. Standard pipeline for any application:
-   load job (read_job | ingest_job_text) → score_match → hr_screen → build_application → (optional critique_cv_package) → send_email
-   Tools refuse out-of-order calls; do the missing step and retry. Don't apologize for the rail in the user reply.
-6. When the user only asks "is this a good fit?" / "review as HR", stop after hr_screen and give a clear verdict. Do not build a CV unless they ask to apply.
-7. CV baselines (resume_variant): "bi" = Power BI / BI / reporting; "data_analyst" = Data Analyst / ops / supply-chain analytics; "data_scientist" = DS / ML / DL; "ai" = AI Engineer / LLM / Agentic. Prefer "auto" unless the family is obvious.
-8. Baseline integrity: NEVER delete experience, certs, education, languages, training, additional-info, or skill categories from the selected baseline. Projects: pick the TOP 5 most relevant to the FULL posting (ranked), rewrite existing bullets only, preserve bullet counts and facts.
-9. Tailor by rewriting/reordering what already exists — headline, summary, bullets, skill category order. Preserve employers, dates, projects, technologies, certifications.
-10. Use hr_screen output as the CV brief: lead with covered must-haves, echo ats_keywords_to_echo where true, address rewrite_priorities, and put missing must-haves into gap_notes.
-11. Email = same claims as the CV. Plain text, 120–180 words, 3–5 short paragraphs. Natural greeting ("Dear [Company] Hiring Team," if no name). No markdown, bullets, hype ("thrilled/excited/perfect fit"), invented anecdotes, or industry claims you cannot prove. Close with a simple invite + professional sign-off.
-12. You cannot send alone. send_email only requests approval. Never claim sent unless a tool result says so.
-13. track_application after every draft and every send. list_applications before drafting to avoid duplicates.
-14. Efficiency: short Telegram-friendly messages. Occasional bullets OK in chat; never in the email body.
-15. Match the user's language in chat (Arabic OK). CV + application email stay in English unless they ask otherwise.
-16. If hr_screen verdict is "skip" or "weak", say so clearly and ask before building a CV. If they still want to apply, proceed with honest gap_notes.
-17. After build_application, offer a quick HR critique (critique_cv_package) before pushing Approve — especially on stretch applications.
-"""
+TOOLS = [get_profile, get_candidate_payload, update_profile, search_jobs, read_job, ingest_job_text, fetch_url, analyze_job, score_match, hr_screen, select_evidence, generate_tailoring, build_pdf, generate_email, critique_cv_package, send_email, track_application, list_applications, remember]
+BASE_SYSTEM_PROMPT = """You are a truthful CV writer and HR screener for one candidate. Career facts exist only in the selected canonical CV variant; profile data is contact metadata. Required sequence: ingest/read job → analyze_job → hr_screen → get_candidate_payload → select_evidence → generate_tailoring → build_pdf → generate_email → send_email. Selections rank evidence only; every canonical experience and project stays in the PDF. Never invent facts. Email is plain text, 120–180 words. Nothing sends without human approval."""
 
 
 def _system_prompt() -> str:
-    parts = [BASE_SYSTEM_PROMPT]
-    profile = store.load_profile()
-    if profile:
-        parts.append("Candidate snapshot (call get_profile for the full record):\n" + store.profile_summary_text(profile))
-    else:
-        parts.append("There is NO profile on file yet. Your first job is to collect one from the user conversationally and save it with update_profile.")
-    notes = store.load_notes()
-    if notes:
-        parts.append("Standing notes from the user:\n" + "\n".join(f"- {n.get('text', '')}" for n in notes[-12:]))
-    stats = store.application_stats()
-    parts.append(f"Tracker: {stats['total']} applications logged, {stats['last_7_days']} in the last 7 days.")
-    parts.append(f"Today's date: {time.strftime('%Y-%m-%d')}.")
-    return "\n\n".join(parts)
+    return "\n\n".join([BASE_SYSTEM_PROMPT, "Identity:\n" + store.profile_summary_text(), f"Today: {time.strftime('%Y-%m-%d')}"])
 
-
-# ---------------------------------------------------------------------------
-# Graph
-# ---------------------------------------------------------------------------
 
 _llm: Optional[ChatOpenAI] = None
-# Which entry of LLM_MODEL_CHAIN we are currently on. Survives for the life of
-# the process, so one 404 doesn't cost every subsequent turn a retry.
 _active_model: Optional[str] = None
 
 
 def _build_client(model: str) -> ChatOpenAI:
-    client_kwargs = {
-        "model": model,
-        "api_key": LLM_API_KEY,
-        "base_url": LLM_BASE_URL,
-        "timeout": LLM_TIMEOUT,
-        "temperature": LLM_TEMPERATURE,
-        "max_tokens": LLM_MAX_TOKENS,
-        "max_retries": LLM_MAX_RETRIES,
-    }
-    # NVIDIA's current reasoning models default to maximum thinking.
-    # Interactive Telegram turns need low-latency tool decisions instead.
-    model_id = model.lower()
-    if model_id == "nvidia/nemotron-3.5-lightning-30b-a3b":
-        # NVIDIA exposes a small explicit reasoning budget for this model.
-        # That keeps an interactive Telegram turn responsive without disabling
-        # the reasoning behavior entirely.
-        client_kwargs["extra_body"] = {
-            "chat_template_kwargs": {"enable_thinking": True},
-            "reasoning_budget": 4096,
-        }
-    elif model_id in {
-        "z-ai/glm-5-3-flash",
-        "z-ai/glm-5.3-flash",
-        "z-ai/glm-5.3",
-        "openai/gpt-oss-20b",
-        "openai/gpt-oss-120b",
-    }:
-        client_kwargs["reasoning_effort"] = "low"
-    return ChatOpenAI(**client_kwargs).bind_tools(TOOLS, parallel_tool_calls=False)
+    return ChatOpenAI(model=model, api_key=LLM_API_KEY, base_url=LLM_BASE_URL, timeout=LLM_TIMEOUT, temperature=LLM_TEMPERATURE, max_tokens=LLM_MAX_TOKENS, max_retries=LLM_MAX_RETRIES).bind_tools(TOOLS, parallel_tool_calls=False)
 
 
 def active_model() -> str:
-    """What the bot is ACTUALLY talking to, which may not be LLM_MODEL."""
     return _active_model or LLM_MODEL
 
 
 def get_client() -> Optional[ChatOpenAI]:
-    """Same name/contract as agent.py's get_client, so bot.py's /diag check
-    (`agent.get_client()`) keeps working unchanged."""
     global _llm, _active_model
+    if _llm is not None:
+        return _llm
     if not LLM_API_KEY:
         return None
-    if _llm is None:
-        _active_model = LLM_MODEL
-        _llm = _build_client(_active_model)
+    _active_model = (list(LLM_MODEL_CHAIN) or [LLM_MODEL])[0]
+    _llm = _build_client(_active_model)
     return _llm
 
 
 def eager_resolve() -> List[str]:
-    """
-    Called once at boot. Walks LLM_MODEL_CHAIN against the real catalogue and
-    pre-builds the client on whichever entry works, so the FIRST real user
-    message doesn't pay for a 404 round-trip and startup logs don't cry FATAL
-    over a primary model that the configured fallback would have covered anyway.
-    """
-    global _llm, _active_model
-    if not LLM_API_KEY:
-        return ["FATAL: LLM_API_KEY is not set — the agent cannot think."]
-
-    chosen, notes = resolve_model(LLM_BASE_URL, LLM_MODEL_CHAIN, LLM_API_KEY)
-    if chosen is None:
-        return notes  # last entry is FATAL — nothing in the chain works
-    _active_model = chosen
-    _llm = _build_client(chosen)
-    # Non-fatal notes (skipped/fell-back entries) still matter — surface them
-    # as WARN so /diag and the startup log show what actually happened.
-    return [n if n.startswith(("FATAL", "WARN")) else f"WARN: {n}" for n in notes]
-
-
-def _demote_model() -> bool:
-    """
-    The active model 404'd. Advance to the next entry in LLM_MODEL_CHAIN and
-    rebuild the client. Returns False when the chain is exhausted.
-    """
-    global _llm, _active_model
-    current = active_model()
-    try:
-        nxt = LLM_MODEL_CHAIN[LLM_MODEL_CHAIN.index(current) + 1]
-    except (ValueError, IndexError):
-        return False
-    logger.error(
-        f"Model '{current}' failed at {LLM_BASE_URL} — falling back to '{nxt}'. "
-        f"Fix LLM_MODEL (or your provider entitlement) to stop running degraded."
-    )
-    _active_model = nxt
-    _llm = _build_client(nxt)
-    return True
-
-
-def _is_model_not_found(e: Exception) -> bool:
-    """A 404 that names the model, not a 404 from a wrong URL path."""
-    name = type(e).__name__
-    if "ModelNotFound" in name or "NotFoundError" in name:
-        return True
-    return "404" in str(e) and "model" in str(e).lower()
-
-
-def _explain_provider_error(e: Exception) -> str:
-    """
-    Provider errors arrive as a bare status code wrapped in 60 lines of
-    LangChain/LangGraph frames. Translate the ones that are config mistakes
-    into something you can act on without opening the logs.
-    """
-    text = str(e)
-    if "404" in text or "NotFound" in type(e).__name__:
-        # An empty body after "Error code: 404" means the HTTP PATH is wrong.
-        # A JSON body naming the model means the MODEL is wrong. Both are config.
-        path_level = text.strip().rstrip(".").endswith("404")
-        cause = (
-            f"the endpoint {LLM_BASE_URL} has no /chat/completions route — LLM_BASE_URL is wrong"
-            if path_level
-            else f"the provider does not serve the model '{LLM_MODEL}' — LLM_MODEL is wrong for this endpoint"
-        )
-        return (
-            f"The AI provider returned 404: {cause}.\n\n"
-            f"Current settings:\n• LLM_BASE_URL = {LLM_BASE_URL}\n• LLM_MODEL = {LLM_MODEL}\n\n"
-            "Run /diag — it now checks the endpoint's model catalogue and names the closest valid id."
-        )
-    if "401" in text or "403" in text:
-        return (
-            f"The AI provider rejected the API key (auth error) for {LLM_BASE_URL}. "
-            "Check LLM_API_KEY belongs to this provider and is still active."
-        )
-    if "503" in text or "ResourceExhausted" in text or "Service Unavailable" in text:
-        return (
-            f"The NVIDIA AI endpoint is temporarily overloaded while using '{active_model()}'. "
-            "The agent retried automatically, but the provider was still at capacity."
-        )
-    if "429" in text:
-        return "The AI provider is rate-limiting this key. The agent retried automatically."
-    if "timeout" in text.lower() or "timed out" in text.lower() or "APITimeoutError" in type(e).__name__:
-        return (
-            f"The AI request timed out after {LLM_TIMEOUT}s while using '{active_model()}'. "
-            "The provider did not finish the response in time." 
-        )
-    return f"The AI provider returned an unexpected error: {e}"
-
-
-def _trim_removals(messages: List[BaseMessage]) -> List[RemoveMessage]:
-    """
-    Same policy as agent.py's _trim: keep history bounded, but never leave an
-    orphaned ToolMessage at the front — a dangling tool result with no
-    preceding tool-calling AIMessage is an API error, not just untidy.
-    Returns RemoveMessage entries; add_messages applies them against the
-    PERSISTED state, so old turns actually leave the checkpointer over time
-    instead of accumulating forever.
-    """
-    if len(messages) <= MAX_HISTORY_MESSAGES:
-        return []
-    keep = messages[-MAX_HISTORY_MESSAGES:]
-    while keep and not isinstance(keep[0], HumanMessage):
-        keep.pop(0)
-    drop_ids = {m.id for m in messages[: len(messages) - len(keep)] if m.id}
-    return [RemoveMessage(id=mid) for mid in drop_ids]
+    return [active_model()] if get_client() else []
 
 
 def _agent_node(state: AgentState) -> dict:
-    llm = get_client()
-    removals = _trim_removals(state["messages"])
-    dropped_ids = {r.id for r in removals}
-    live_messages = [m for m in state["messages"] if m.id not in dropped_ids]
-    payload = [SystemMessage(content=_system_prompt())] + live_messages
-
-    attempts_on_model = 0
-    max_transient_retries = 2
-    while True:
-        try:
-            response = llm.invoke(payload)
-            break
-        except Exception as e:
-            error_text = str(e).lower()
-            is_rate_limited = "429" in error_text or "rate limit" in error_text
-            transient = (
-                "503" in error_text
-                or "service unavailable" in error_text
-                or "resourceexhausted" in error_text
-                or is_rate_limited
-                or "timeout" in error_text
-                or "timed out" in error_text
-            )
-            if transient and attempts_on_model < max_transient_retries:
-                # Groq includes a concrete retry window in 429 errors
-                # (e.g. "try again in 6.66s"). Honor it instead of hammering
-                # the same token bucket with 1s/2s retries.
-                delay = 2 ** attempts_on_model
-                if is_rate_limited:
-                    match = re.search(r"try again in ([0-9.]+)s", str(e), re.IGNORECASE)
-                    if match:
-                        delay = min(max(float(match.group(1)) + 0.5, 1.0), 60.0)
-                attempts_on_model += 1
-                logger.warning(
-                    f"Transient LLM error on '{active_model()}'; "
-                    f"retrying in {delay:.1f}s ({attempts_on_model}/{max_transient_retries})."
-                )
-                time.sleep(delay)
-                continue
-
-            # Fail over to the next configured model after transient
-            # provider failures too. This lets OpenRouter move from the
-            # DeepSeek free endpoint to openrouter/free when the primary is
-            # unavailable, rate-limited, or times out.
-            if not _is_model_not_found(e) and not transient:
-                raise
-            if not _demote_model():
-                raise
-            attempts_on_model = 0
-            llm = get_client()
-    # Removals + the new response land in the same state update: old turns
-    # are pruned from the checkpointer, the new one is appended, in one step.
-    return {"messages": [*removals, response]}
+    client = get_client()
+    if client is None:
+        raise RuntimeError("LLM_API_KEY is not configured")
+    messages = list(state.get("messages") or [])[-MAX_HISTORY_MESSAGES:]
+    return {"messages": [client.invoke([SystemMessage(content=_system_prompt()), *messages])]}
 
 
 def _route(state: AgentState) -> str:
-    last = state["messages"][-1]
-    if isinstance(last, AIMessage) and last.tool_calls:
-        return "tools"
-    return END
+    last = (state.get("messages") or [None])[-1]
+    return "tools" if isinstance(last, AIMessage) and last.tool_calls else END
 
 
 def _build_graph():
@@ -1157,59 +329,32 @@ def _build_graph():
     return g
 
 
-_compiled_graph = None
-_graph_lock: Optional["asyncio.Lock"] = None
-_checkpointer_cm = None  # kept alive deliberately: from_conn_string() is an
-# @asynccontextmanager generator, and if this reference is dropped it gets
-# garbage-collected, which runs its `finally` and closes the connection out
-# from under a saver that's still in use. Module-level = lives as long as
-# the process does, same as a plain global connection would.
+_checkpointer = None
+_checkpointer_context = None
+_graph = None
 
 
 async def _get_checkpointer():
-    """Postgres if DATABASE_URL is set (survives Railway volume loss on
-    redeploy too), else a SQLite file on the mounted DATA_DIR volume. Both
-    are async savers because run_turn drives the graph with ainvoke — the
-    sync SqliteSaver/PostgresSaver raise NotImplementedError under ainvoke,
-    so this is not optional."""
-    global _checkpointer_cm
-    if DATABASE_URL:
-        from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-
-        _checkpointer_cm = AsyncPostgresSaver.from_conn_string(DATABASE_URL)
-    else:
-        _checkpointer_cm = AsyncSqliteSaver.from_conn_string(str(DATA_DIR / "checkpoints.sqlite"))
-    saver = await _checkpointer_cm.__aenter__()  # kept open for process lifetime
-    await saver.setup()
-    return saver
+    global _checkpointer, _checkpointer_context
+    if _checkpointer is None:
+        # Current langgraph exposes from_conn_string as an async context
+        # manager. Keep that context open for the process lifetime so its
+        # aiosqlite connection remains valid for the compiled graph.
+        _checkpointer_context = AsyncSqliteSaver.from_conn_string(str(DATA_DIR / "graph_checkpoints.sqlite"))
+        _checkpointer = await _checkpointer_context.__aenter__()
+    return _checkpointer
 
 
 async def _get_graph():
-    """Lazily build+compile once, guarded by an asyncio.Lock so two concurrent
-    first requests (e.g. two Telegram users messaging at the same instant on
-    a cold start) don't each open their own checkpointer connection."""
-    global _compiled_graph, _graph_lock
-    if _compiled_graph is not None:
-        return _compiled_graph
-    if _graph_lock is None:
-        _graph_lock = asyncio.Lock()
-    async with _graph_lock:
-        if _compiled_graph is None:
-            checkpointer = await _get_checkpointer()
-            _compiled_graph = _build_graph().compile(checkpointer=checkpointer)
-    return _compiled_graph
-
-
-# ---------------------------------------------------------------------------
-# Public contract — matches agent.py exactly
-# ---------------------------------------------------------------------------
+    global _graph
+    if _graph is None:
+        _graph = _build_graph().compile(checkpointer=await _get_checkpointer())
+    return _graph
 
 
 @dataclass
 class AgentTurn:
-    """Everything bot.py needs to render one turn. Identical shape to agent.py."""
-
-    status: str  # "MESSAGE" | "NEEDS_APPROVAL" | "ERROR"
+    status: str
     text: str = ""
     attachments: List[Dict[str, str]] = field(default_factory=list)
     approval: Optional[Dict[str, Any]] = None
@@ -1217,81 +362,48 @@ class AgentTurn:
     tool_trace: List[str] = field(default_factory=list)
 
 
-async def _collect_attachments_and_trace(graph, config, turn: AgentTurn) -> None:
-    """Pull tool-call names and any _attachment payloads out of this run's
-    new state, without replaying already-seen messages on later turns."""
+async def _collect_new_messages(graph, config, before_ids: set, turn: AgentTurn) -> None:
     state = await graph.aget_state(config)
     for msg in state.values.get("messages", []):
-        if isinstance(msg, AIMessage) and msg.tool_calls:
-            for tc in msg.tool_calls:
-                turn.tool_trace.append(tc["name"])
-        if isinstance(msg, ToolMessage):
+        if getattr(msg, "id", None) in before_ids:
+            continue
+        if isinstance(msg, AIMessage):
+            turn.tool_trace.extend(tc["name"] for tc in (msg.tool_calls or []))
+        elif isinstance(msg, ToolMessage):
             try:
                 payload = json.loads(msg.content)
             except (json.JSONDecodeError, TypeError):
                 continue
-            att = payload.get("_attachment") if isinstance(payload, dict) else None
-            if att and att not in turn.attachments:
-                turn.attachments.append(att)
+            attachment = payload.get("_attachment") if isinstance(payload, dict) else None
+            if attachment and attachment not in turn.attachments:
+                turn.attachments.append(attachment)
 
 
-async def run_turn(
-    user_id: int,
-    user_message: Optional[str] = None,
-    resume_tool_result: Optional[Dict[str, Any]] = None,
-) -> AgentTurn:
-    """
-    Advance the user's conversation by one turn. Same contract as agent.py:
-
-    - Normal message: pass user_message.
-    - Resuming after an approval decision: pass resume_tool_result, which is
-      {"tool_call_id": ..., "content": {...}} — the outcome of the send the
-      human just approved or rejected.
-
-    Internally, resume_tool_result["content"] becomes the value returned by
-    interrupt() inside send_email — tool_call_id is accepted for interface
-    compatibility with agent.py but isn't needed here: LangGraph resumes
-    whichever interrupt is pending for this thread.
-    """
-    turn = AgentTurn(status="MESSAGE")
-
+async def run_turn(user_id: int, user_message: Optional[str] = None, resume_tool_result: Optional[Dict[str, Any]] = None) -> AgentTurn:
     if not get_client():
         return AgentTurn(status="ERROR", error="LLM_API_KEY is not configured — set it in Railway → Variables.")
-
     graph = await _get_graph()
     config = {"configurable": {"thread_id": str(user_id)}, "recursion_limit": MAX_TOOL_STEPS * 2 + 4}
-
+    before = await graph.aget_state(config)
+    before_ids = {getattr(m, "id", None) for m in (before.values or {}).get("messages", []) if getattr(m, "id", None)}
     try:
         if resume_tool_result is not None:
             result = await graph.ainvoke(Command(resume=resume_tool_result["content"]), config=config)
         else:
-            snapshot = await graph.aget_state(config)
-            base_state = {"user_id": user_id, "job": (snapshot.values or {}).get("job", {})} if snapshot.values else {"user_id": user_id, "job": {}}
-            result = await graph.ainvoke({**base_state, "messages": [("user", user_message or "")]}, config=config)
+            existing = (before.values or {}).get("job", {}) if before.values else {}
+            result = await graph.ainvoke({"user_id": user_id, "job": existing, "messages": [HumanMessage(content=user_message or "")]}, config=config)
     except GraphRecursionError:
-        logger.warning(f"Recursion limit hit for user {user_id} — agent looped without finishing.")
-        return AgentTurn(
-            status="ERROR",
-            error=f"I got stuck after {MAX_TOOL_STEPS} steps without finishing. Try /reset and rephrase.",
-        )
-    except Exception as e:
-        logger.error(f"Graph run failed for user {user_id}: {e}", exc_info=True)
-        return AgentTurn(status="ERROR", error=_explain_provider_error(e))
-
-    await _collect_attachments_and_trace(graph, config, turn)
-
+        return AgentTurn(status="ERROR", error=f"I got stuck after {MAX_TOOL_STEPS} steps. Try /reset and rephrase.")
+    except Exception as exc:
+        logger.error("Graph run failed for user %s: %s", user_id, exc, exc_info=True)
+        return AgentTurn(status="ERROR", error=str(exc))
+    turn = AgentTurn(status="MESSAGE")
+    await _collect_new_messages(graph, config, before_ids, turn)
     state = await graph.aget_state(config)
     if state.next:
-        # Graph paused on an interrupt() — currently only send_email does this.
         pending = state.tasks[0].interrupts[0].value if state.tasks and state.tasks[0].interrupts else {}
-        turn.status = "NEEDS_APPROVAL"
-        turn.approval = {
-            "tool_call_id": "",  # not used by graph_agent's resume path; kept for bot.py shape compatibility
-            **pending,
-        }
-        turn.text = ""
+        turn.status, turn.approval = "NEEDS_APPROVAL", {"tool_call_id": "", **pending}
         return turn
-
-    last = result["messages"][-1]
+    last = (result.get("messages") or [None])[-1]
     turn.text = (last.content or "…").strip() if isinstance(last, AIMessage) else "…"
     return turn

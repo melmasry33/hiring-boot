@@ -338,7 +338,7 @@ def choose_variant(role_text: str, job_text: str, requested: str = "auto") -> Di
     if title_hits:
         key, phrase = title_hits[0]
         extra = [f"{k}:{p}" for k, p in title_hits[1:]]
-        reasons.append(f"Role-family/title match: {phrase} → {key}")
+        reasons.append(f"Role-family/title match: {phrase} -> {key}")
         if extra:
             reasons.append("Additional title signals: " + ", ".join(extra[:3]))
         return {
@@ -352,7 +352,7 @@ def choose_variant(role_text: str, job_text: str, requested: str = "auto") -> Di
     body_hits = _family_hits(body)
     if body_hits:
         key, phrase = body_hits[0]
-        reasons.append(f"Role phrase in JD body: {phrase} → {key}")
+        reasons.append(f"Role phrase in JD body: {phrase} -> {key}")
         return {
             "selected_variant": key,
             "reasons": reasons,

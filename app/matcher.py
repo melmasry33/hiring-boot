@@ -562,11 +562,26 @@ def analyze_job(
     else:
         verdict, verdict_label = "skip", "Skip — low probability of interview"
 
-    evidence = []
-    for exp in (variant.get("experience") or [])[:4]:
-        evidence.append({"type": "experience", "id": exp.get("id"), "label": f"{exp.get('role')} @ {exp.get('company')}"})
-    for proj in (variant.get("projects") or [])[:6]:
-        evidence.append({"type": "project", "id": proj.get("id"), "label": proj.get("name")})
+    # Rank all canonical evidence against actual JD concepts. The ranking is
+    # advisory only: later assembly always preserves every baseline record.
+    jd_concepts = set(jd_skills["all"])
+
+    def evidence_score(record: Dict[str, Any]) -> int:
+        text = " ".join(str(record.get(k) or "") for k in ("role", "company", "name", "tech"))
+        text += " " + " ".join(str(x) for x in (record.get("bullets") or []))
+        hits = set(_skill_hits(_norm(text)))
+        exact = len(hits & jd_concepts)
+        related = sum(1 for skill in jd_concepts if any(rel in hits for rel in SKILL_BY_CANONICAL[skill].related))
+        return exact * 10 + related * 2
+
+    evidence = [
+        {"type": "experience", "id": exp.get("id"), "label": f"{exp.get('role')} @ {exp.get('company')}", "relevance_score": evidence_score(exp)}
+        for exp in (variant.get("experience") or [])
+    ] + [
+        {"type": "project", "id": proj.get("id"), "label": proj.get("name"), "relevance_score": evidence_score(proj)}
+        for proj in (variant.get("projects") or [])
+    ]
+    evidence.sort(key=lambda item: (-item["relevance_score"], item["type"], item["label"] or ""))
 
     warnings: List[str] = []
     if seniority["source"] == "unspecified":
@@ -620,6 +635,19 @@ def analyze_job(
 
 def build_tailoring_brief(analysis: Dict[str, Any], variant: Dict[str, Any]) -> Dict[str, Any]:
     matches = analysis.get("candidate_skill_matches") or {}
+    ranked = analysis.get("evidence") or []
+    ranked_exp = [e for e in ranked if e.get("type") == "experience"]
+    ranked_projects = [e for e in ranked if e.get("type") == "project"]
+    jd_terms = set((analysis.get("required_skills") or []) + (analysis.get("preferred_skills") or []))
+
+    def cert_score(cert: Dict[str, Any]) -> int:
+        return sum(1 for term in jd_terms if term in _norm(str(cert.get("text") or "")))
+
+    ranked_certs = sorted(
+        ({"id": c.get("id"), "text": c.get("text"), "relevance_score": cert_score(c)}
+         for c in (variant.get("certification_records") or [])),
+        key=lambda item: (-item["relevance_score"], item["text"] or ""),
+    )
     return {
         "target_role": analysis.get("role") or "",
         "company": analysis.get("company") or "",
@@ -628,17 +656,13 @@ def build_tailoring_brief(analysis: Dict[str, Any], variant: Dict[str, Any]) -> 
         "matched_skills": matches.get("exact_required") or [],
         "related_skills": (matches.get("related_required") or []) + (matches.get("transferable_required") or []),
         "missing_skills": analysis.get("missing_skills") or [],
-        "strongest_evidence": [e.get("label") for e in (analysis.get("evidence") or [])[:5]],
-        "relevant_projects": [
-            {"id": p.get("id"), "name": p.get("name")} for p in (variant.get("projects") or [])
-        ],
-        "relevant_experience": [
-            {"id": e.get("id"), "role": e.get("role"), "company": e.get("company")}
-            for e in (variant.get("experience") or [])
-        ],
-        "relevant_certifications": [
-            {"id": c.get("id"), "text": c.get("text")} for c in (variant.get("certification_records") or [])
-        ],
+        "strongest_evidence": [e.get("label") for e in ranked[:5]],
+        "strongest_experience_ids": [e.get("id") for e in ranked_exp],
+        "strongest_project_ids": [e.get("id") for e in ranked_projects],
+        "strongest_certification_ids": [c.get("id") for c in ranked_certs],
+        "relevant_projects": [{"id": e.get("id"), "name": e.get("label"), "relevance_score": e.get("relevance_score")} for e in ranked_projects],
+        "relevant_experience": [{"id": e.get("id"), "label": e.get("label"), "relevance_score": e.get("relevance_score")} for e in ranked_exp],
+        "relevant_certifications": ranked_certs,
         "seniority_alignment": analysis.get("seniority") or {},
         "role_alignment": analysis.get("role_alignment") or {},
         "constraints": analysis.get("constraints") or [],

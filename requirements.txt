@@ -10,6 +10,7 @@ python-telegram-bot==21.9
 openai>=2.45,<3.0
 httpx>=0.27,<0.28
 fpdf2>=2.7.9
+pypdf>=5.0
 python-dotenv>=1.0.1
 
 # graph_agent.py — LangGraph rewrite. Core deps, always required:

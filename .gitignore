@@ -17,3 +17,7 @@ data/notes.json
 # Google OAuth secrets
 gmail_token.json
 client_secret_*.json
+# Local LangGraph checkpoint database.
+data/graph_checkpoints.sqlite
+data/graph_checkpoints.sqlite-shm
+data/graph_checkpoints.sqlite-wal
