@@ -1,8 +1,12 @@
-# Telegram Career Agent
+# Telegram Hiring Agent
 
-A real agent you talk to in Telegram that finds jobs, judges fit honestly, writes a
-tailored CV PDF, drafts the outreach email, and sends it once you approve. Built to
-run 24/7 on Railway from a single container.
+A professional **CV writer + HR screener** you talk to in Telegram. It finds
+jobs, judges fit the way a recruiter would, writes a tailored ATS CV PDF, drafts
+outreach email, critiques the package, and sends only after you approve. Built
+to run 24/7 on Railway from a single container.
+
+**What it is:** your personal hiring squad for landing interviews — not an
+employer ATS and not a generic chatbot.
 
 ---
 
@@ -87,8 +91,10 @@ description and watch it work.
 There are no magic keywords. It is one continuous conversation:
 
 - *"Find AI Engineer jobs in Cairo posted this week"*
-- paste a LinkedIn link, or paste the description text
-- *"Is this actually a good fit or am I wasting my time?"*
+- paste a LinkedIn link, or paste the full job description
+- *"Review this as HR — apply, stretch, or skip?"*
+- *"Build the tailored CV and email"*
+- *"Critique the draft before I send"*
 - *"Make the email shorter and less formal"*
 - *"Add Recovera to my profile — multi-agent BI system, FastAPI + LangChain"*
 - *"What did I apply to this week?"*
@@ -110,45 +116,54 @@ There are no magic keywords. It is one continuous conversation:
 
 ## What it can actually do
 
-Eleven tools, chosen by the model turn by turn:
+Fourteen tools, chosen by the model turn by turn:
 
 | Tool | Effect |
 |---|---|
 | `get_profile` | Reads the entire stored profile before writing anything |
 | `update_profile` | Permanently edits your profile from chat |
 | `search_jobs` | LinkedIn public job feed, with location / remote / recency filters |
-| `read_job` | Pulls the full text of a posting and any contact emails in it |
+| `read_job` | Pulls the full text of a posting URL and any contact emails in it |
+| `ingest_job_text` | Loads a pasted JD when LinkedIn blocks the server (or you paste text) |
 | `fetch_url` | Reads a company page or a GitHub repo to verify a claim |
-| `score_match` | Deterministic 0-100 fit score — math, not the model's opinion |
-| `build_application` | Generates the tailored ATS-friendly PDF and stages the email |
+| `score_match` | Deterministic 0–100 fit score — math, not the model's opinion |
+| `hr_screen` | Recruiter verdict: apply / stretch / weak / skip + must-have gaps + ATS keywords |
+| `build_application` | Generates the tailored ATS PDF and stages the email |
+| `critique_cv_package` | Hiring-manager pass on the staged CV + email before Approve |
 | `send_email` | **Asks permission.** Cannot send on its own |
 | `track_application` | Keeps the application history current |
 | `list_applications` | Checks history, so it won't apply to the same job twice |
 | `remember` | Stores standing preferences, injected into every future chat |
 
+Pipeline (enforced in code):
+
+`read_job | ingest_job_text` → `score_match` → `hr_screen` → `build_application` → `send_email`
+
 Guardrails that stay on: the system prompt forbids inventing experience, projects,
-metrics or certifications; `build_application` has a mandatory `gap_notes` field so
-the model must state what your profile doesn't cover; and nothing leaves the process
-without `approved=True`, which only your button press sets.
+metrics or certifications; baselines in `cv_variants.json` are fact-locked;
+`build_application` requires `gap_notes`; and nothing leaves without your Approve tap.
 
 ---
 
 ## Architecture
 
 ```
-Telegram  ──►  bot.py          chat surface, approval buttons, commands
+Telegram  ──►  bot.py              chat surface, approval buttons, commands
                   │
                   ▼
-               agent.py        persistent tool-calling loop (one thread per user)
+               graph_agent.py      LangGraph ReAct + tool rails (active)
                   │
-     ┌────────────┼────────────┬──────────────┬───────────────┐
-     ▼            ▼            ▼              ▼               ▼
-  store.py     jobs.py    matching.py  cv_generator.py  email_sender.py
-  JSON on      LinkedIn   deterministic   fpdf2 PDF      SMTP, off the
-  the volume   over HTTP  fit scoring                    event loop
-                  │
-               health.py       binds $PORT so Railway sees a live service
+     ┌────────────┼────────────┬──────────────┬───────────────┬────────────┐
+     ▼            ▼            ▼              ▼               ▼            ▼
+  store.py     jobs.py    matching.py   hr_review.py   cv_generator  email_sender
+  JSON on      LinkedIn   fit score     HR screen      fpdf2 PDF     Gmail API
+  the volume   over HTTP  0–100         apply/skip
+
+health.py binds $PORT so Railway sees a live service.
 ```
+
+`agent.py` is the legacy hand-rolled loop (kept for offline smoke tests). Production
+uses `graph_agent.py`.
 
 ### Three things that changed to make this deployable
 

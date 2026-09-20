@@ -1,53 +1,34 @@
 """
-graph_agent.py — LangGraph rewrite of the career agent.
+graph_agent.py — LangGraph hiring agent (CV writer + HR screener).
 
 WHY THIS EXISTS
 ----------------
-The old loop (agent.py) trusted the model to remember an 11-point system
-prompt and call tools in the right order every time: read the job, THEN
-score it, THEN build the CV, THEN ask to send. When the model skipped a
-step — built a CV without reading the posting, tried to send before
-building — nothing stopped it. That's not a framework problem, it's a
-missing-guardrail problem: a longer prompt does not make a model more
-reliable at sequencing.
+The old loop (agent.py) trusted the model to remember a long system prompt
+and call tools in the right order every time: read the job, THEN score it,
+THEN build the CV, THEN ask to send. When the model skipped a step —
+built a CV without reading the posting, tried to send before building —
+nothing stopped it. That's not a framework problem, it's a missing-guardrail
+problem: a longer prompt does not make a model more reliable at sequencing.
 
-This version is the SAME agent — one LLM, the same nine actions, the model
-still decides what to call and when — but the risky tools now enforce their
-own preconditions in code:
+This version is the SAME agent surface — one LLM, tools the model chooses —
+but the risky tools enforce their own preconditions in code:
 
-    read_job  →  score_match  →  build_application  →  send_email
+    read_job | ingest_job_text  →  score_match  →  build_application  →  send_email
 
-  - score_match refuses to run until read_job has populated job text for
-    the job in play.
-  - build_application refuses to run until score_match has actually scored
-    THAT job (switching to a different URL resets the requirement).
-  - send_email refuses to run until build_application produced a draft for
-    that same job.
+  - score_match / hr_screen refuse until a job is loaded (URL or pasted text).
+  - build_application refuses until score_match has scored THAT job.
+  - send_email refuses until build_application produced a draft for that job.
 
 A blocked call doesn't crash — it returns a plain error message as the tool
-result, exactly like the API rejecting a malformed call. The model sees it
-on the next step and corrects itself. That's the actual fix for "wrong
-order": hard rails, not more prose.
+result. The model sees it on the next step and corrects itself.
 
-WHAT THE FRAMEWORK GENUINELY BUYS US (not just re-skinning agent.py):
+WHAT THE FRAMEWORK GENUINELY BUYS US:
 
-  1. Real persistence. Conversation + in-flight job state live in a
-     LangGraph checkpointer (SQLite file by default, Postgres if
-     DATABASE_URL is set) instead of a hand-merged JSON blob. A crash
-     mid-tool-call no longer loses the thread.
-  2. send_email is a genuine `interrupt()` — the graph itself pauses and
-     the checkpointer persists that paused state. bot.py resumes it with
-     `Command(resume=...)` after the human taps Approve/Reject. No more
-     hand-rolled `pending_approval` dict threaded through AgentTurn.
+  1. Real persistence via LangGraph checkpointer (SQLite / Postgres).
+  2. send_email is a genuine interrupt() for human Approve/Reject.
 
-WHAT THIS DELIBERATELY DOES NOT ADD: no planner node, no subagents, no
-vector memory, no multi-graph orchestration. None of that was the actual
-complaint — a single ReAct loop that enforces its own rules is enough.
-
-DROP-IN CONTRACT: same public surface as agent.py — `AgentTurn`,
-`run_turn(user_id, user_message=None, resume_tool_result=None)`,
-`get_client()` — so bot.py needs only an import change, not a rewrite.
-See MIGRATION.md for the two-line diff.
+PERSONA: dual senior team — professional CV writer + HR recruiter screen —
+aimed at getting the candidate real interviews without inventing facts.
 """
 
 from __future__ import annotations
@@ -78,6 +59,7 @@ from langgraph.prebuilt import InjectedState, ToolNode
 from langgraph.types import Command, interrupt
 
 import cv_generator
+import hr_review
 import jobs as job_source
 import matching
 import store
@@ -212,7 +194,8 @@ async def read_job(
     """Read the full text of a job posting from its URL (LinkedIn or any other
     job board). Always call this when the user sends a link instead of
     guessing from the URL. Also reports any contact emails found in the post.
-    This is the required first step before score_match or build_application."""
+    This (or ingest_job_text) is required before score_match / hr_screen /
+    build_application."""
     result = await job_source.get_linkedin_job(url)
     text = result.get("description") or result.get("text") or ""
     new_job: JobContext = {
@@ -235,6 +218,60 @@ async def read_job(
 
 
 @tool
+def ingest_job_text(
+    job_text: str,
+    state: Annotated[AgentState, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId],
+    job_url: str = "",
+    role_hint: str = "",
+    company_hint: str = "",
+) -> Command:
+    """Load a pasted job description into the current job context. Use this
+    whenever the user pastes JD text (or LinkedIn blocks the server from
+    reading a URL). Prefer this over inventing job content from memory.
+    After ingesting, call score_match then hr_screen before building a CV.
+
+    job_text: the full pasted posting (requirements + responsibilities).
+    job_url: optional source URL if known.
+    role_hint / company_hint: optional title and company if obvious from context.
+    """
+    text = (job_text or "").strip()
+    if len(text) < 40:
+        return _blocked(
+            tool_call_id,
+            "Job text is too short to screen. Paste the full posting "
+            "(responsibilities + requirements), not just the title.",
+        )
+    # Cap stored text so tool messages stay within context.
+    stored = text[:14000]
+    new_job: JobContext = {
+        "job_url": (job_url or "").strip(),
+        "job_text": stored,
+        "score": {},
+        "application_built": False,
+    }
+    meta = {
+        "ok": True,
+        "chars": len(stored),
+        "job_url": new_job["job_url"] or None,
+        "role_hint": (role_hint or "").strip() or None,
+        "company_hint": (company_hint or "").strip() or None,
+        "message": "Job text loaded. Next: score_match, then hr_screen, then build_application if applying.",
+    }
+    return Command(
+        update={
+            "job": new_job,
+            "messages": [
+                ToolMessage(
+                    content=json.dumps(meta, ensure_ascii=False),
+                    tool_call_id=tool_call_id,
+                )
+            ],
+        }
+    )
+
+
+@tool
 async def fetch_url(url: str, reason: str = "") -> Any:
     """Fetch any other web page as text — a company's about/careers page, a
     GitHub repo to verify what a project actually contains before claiming it
@@ -247,17 +284,16 @@ def score_match(
     state: Annotated[AgentState, InjectedState],
     tool_call_id: Annotated[str, InjectedToolCallId],
 ) -> Command:
-    """Run a deterministic keyword/seniority match of the CURRENTLY-READ job
-    against the stored profile. Returns a 0-100 score, matched skills,
-    missing skills and a seniority warning. You must call read_job first —
-    this scores whatever job read_job last loaded, not free text."""
+    """Run a deterministic skill/seniority match of the CURRENT job (from
+    read_job or ingest_job_text) against the stored profile. Returns 0-100,
+    matched skills, missing must-haves, and seniority signal. Required before
+    build_application."""
     job = _job(state)
     job_text = job.get("job_text")
     if not job_text:
         return _blocked(
             tool_call_id,
-            "No job has been read yet. Call read_job on the posting URL first — "
-            "you cannot score a job you have not read.",
+            "No job is loaded. Call read_job (URL) or ingest_job_text (pasted JD) first.",
         )
     result = matching.score_job(job_text)
     new_job: JobContext = {**job, "score": result}
@@ -267,6 +303,127 @@ def score_match(
             "messages": [ToolMessage(content=json.dumps(result, default=str), tool_call_id=tool_call_id)],
         }
     )
+
+
+@tool
+def hr_screen(
+    state: Annotated[AgentState, InjectedState],
+    tool_call_id: Annotated[str, InjectedToolCallId],
+) -> Command:
+    """Run a professional HR / recruiter screen of the CURRENT loaded job vs
+    the candidate profile. Returns apply/stretch/weak/skip verdict, must-have
+    coverage, ATS keywords to echo, deal-breakers, interview risks, and CV
+    rewrite priorities. Call after score_match (or right after loading a job
+    when the user asks 'is this a good fit?' / 'review this as HR'). Do not
+    invent gaps — report only what the screen returns."""
+    job = _job(state)
+    job_text = job.get("job_text")
+    if not job_text:
+        return _blocked(
+            tool_call_id,
+            "No job is loaded. Call read_job or ingest_job_text before hr_screen.",
+        )
+    review = hr_review.hr_screen(job_text)
+    # Attach a chat-ready blurb so the model can quote it accurately.
+    if review.get("ok"):
+        review["chat_summary"] = hr_review.format_hr_review_for_chat(review)
+    # Persist latest HR packet on the job context for later CV guidance.
+    scored = job.get("score") or {}
+    new_job: JobContext = {**job, "score": {**scored, "hr_screen": review}}
+    return Command(
+        update={
+            "job": new_job,
+            "messages": [
+                ToolMessage(
+                    content=json.dumps(review, ensure_ascii=False, default=str)[:12000],
+                    tool_call_id=tool_call_id,
+                )
+            ],
+        }
+    )
+
+
+@tool
+def critique_cv_package(
+    state: Annotated[AgentState, InjectedState],
+    focus: str = "full",
+) -> dict:
+    """Review the staged application draft (CV path + email) the way a hiring
+    manager would in a 60-second pass. Use after build_application when the
+    user asks to critique, improve, or stress-test the package before send.
+
+    focus: "full" | "cv" | "email" | "ats"
+    """
+    draft = store.load_draft(state["user_id"])
+    if not draft:
+        return {
+            "ok": False,
+            "error": "No staged draft. Call build_application first, then critique.",
+        }
+    profile = store.load_profile() or {}
+    focus_n = (focus or "full").strip().lower()
+    issues: List[str] = []
+    strengths: List[str] = []
+    subject = (draft.get("email_subject") or "").strip()
+    body = (draft.get("email_body") or "").strip()
+    gaps = draft.get("gap_notes") or []
+    fit = (draft.get("fit_summary") or "").strip()
+
+    if focus_n in ("full", "email", "ats"):
+        words = len(body.split())
+        if words and (words < 90 or words > 220):
+            issues.append(f"Email length {words} words — target 120–180 for recruiter skim.")
+        if re.search(r"[#*_`]|^\s*[-•]", body, re.M):
+            issues.append("Email still has markdown/bullets — plain text only.")
+        if re.search(r"\b(thrilled|excited|passionate|perfect fit|great fit)\b", body, re.I):
+            issues.append("Email uses hype phrases recruiters discount — rewrite colder and more specific.")
+        if not subject:
+            issues.append("Missing email subject.")
+        elif len(subject) > 80:
+            issues.append("Subject over 80 characters.")
+        else:
+            strengths.append(f"Subject is usable: {subject}")
+        if gaps:
+            strengths.append(f"Gaps were logged honestly ({len(gaps)}).")
+        else:
+            issues.append("No gap_notes recorded — confirm there truly are none before send.")
+
+    if focus_n in ("full", "cv", "ats"):
+        pdf = draft.get("pdf_path") or ""
+        if not pdf or not os.path.exists(pdf):
+            issues.append("CV PDF path missing or file not found.")
+        else:
+            strengths.append(f"CV PDF staged: {os.path.basename(pdf)}")
+        if not fit:
+            issues.append("fit_summary empty — HR needs a one-liner on why this candidate.")
+        role = draft.get("role") or ""
+        company = draft.get("company") or ""
+        if not role or not company:
+            issues.append("Role/company incomplete on the draft.")
+        else:
+            strengths.append(f"Targeting: {role} @ {company}")
+
+    if focus_n in ("full", "ats"):
+        job_url = draft.get("job_url") or ""
+        if job_url:
+            strengths.append(f"Linked to posting: {job_url}")
+
+    verdict = "ready" if len(issues) <= 1 else ("polish" if len(issues) <= 3 else "rework")
+    return {
+        "ok": True,
+        "verdict": verdict,
+        "focus": focus_n,
+        "strengths": strengths,
+        "issues": issues,
+        "hr_one_liner": (
+            "Package is interview-ready."
+            if verdict == "ready"
+            else "Fix the listed issues before Approve — recruiters will bounce on them."
+        ),
+        "draft_role": draft.get("role"),
+        "draft_company": draft.get("company"),
+        "candidate": profile.get("name"),
+    }
 
 
 @tool
@@ -291,10 +448,11 @@ async def build_application(
 ) -> Command:
     """Produce the tailored application package: generates a real ATS-friendly
     PDF CV (sent to the user automatically) and stores the email draft.
-    Requires read_job AND score_match to have already run for this job —
-    call this only once you have read the profile and the actual job text,
-    and have resolved anything ambiguous by asking the user. Select and
-    reorder content for THIS job — do not dump everything.
+    Requires a loaded job (read_job or ingest_job_text) AND score_match for
+    this job — call this only once you have read the profile and the actual
+    job text, run hr_screen for the rewrite brief, and resolved anything
+    ambiguous by asking the user. Select and reorder content for THIS job —
+    do not dump everything.
 
     role: the exact job title you are applying for. NOT the company name.
     company: the hiring company's name only.
@@ -336,7 +494,7 @@ async def build_application(
     """
     job = _job(state)
     if not job.get("job_text"):
-        return _blocked(tool_call_id, "No job has been read yet. Call read_job first.")
+        return _blocked(tool_call_id, "No job is loaded. Call read_job or ingest_job_text first.")
     if not job.get("score"):
         return _blocked(tool_call_id, "This job hasn't been scored yet. Call score_match first.")
 
@@ -472,7 +630,7 @@ async def build_application(
         text = re.sub(r"\\?\*\*(.*?)\\?\*\*", r"\1", text)
         text = re.sub(r"(?m)^\s*#{1,6}\s*", "", text)
         text = re.sub(r"(?m)^\s*[-*+]\s+", "", text)
-        text = text.replace("\**", "").replace("**", "")
+        text = text.replace(r"\**", "").replace("**", "")
         text = re.sub(r"\\([*#_\[\]()])", r"\1", text)
         paragraphs = [re.sub(r"[ \t]+", " ", p).strip() for p in re.split(r"\n\s*\n+", text)]
         paragraphs = [p for p in paragraphs if p]
@@ -671,37 +829,61 @@ def remember(note: str) -> dict:
 
 
 TOOLS = [
-    get_profile, update_profile, search_jobs, read_job, fetch_url,
-    score_match, build_application, send_email, track_application,
-    list_applications, remember,
+    get_profile, update_profile, search_jobs, read_job, ingest_job_text, fetch_url,
+    score_match, hr_screen, build_application, critique_cv_package, send_email,
+    track_application, list_applications, remember,
 ]
 INTERRUPTING_TOOLS = {"send_email"}
 
 
 # ---------------------------------------------------------------------------
-# System prompt (unchanged content from agent.py, minus the ordering
-# instructions that are now enforced by the tools themselves)
+# System prompt — dual senior team: CV Writer + HR Recruiter
 # ---------------------------------------------------------------------------
 
-BASE_SYSTEM_PROMPT = """You are a career agent working for one specific person: a job seeker who needs real interviews, fast. You are not a chatbot that answers questions about job hunting — you do the work: find postings, judge fit honestly, tailor the CV, draft the outreach, and keep the tracker current.
+BASE_SYSTEM_PROMPT = """You are a full hiring squad for ONE job seeker — not a chatbot FAQ.
 
-How you behave:
+You operate as two senior professionals in one voice:
 
-1. Be conversational and direct. Reply in plain text when you are talking; call a tool when you are acting. If something is ambiguous, just ask — a short question beats a confident guess.
-2. NEVER invent experience, projects, skills, employers, metrics or certifications. Every line on the CV must trace to get_profile output or something the user told you in this conversation. If a posting wants something they do not have, say so in gap_notes.
-3. Always call get_profile before writing CV or email content. Do not work from memory of an earlier turn's summary.
-4. When given a link, call read_job. When given pasted text, use it directly. If LinkedIn refuses the server (it throttles cloud IPs), say so plainly and ask the user to paste the description — do not pretend you read it.
-5. score_match, build_application and send_email will refuse to run out of order (they'll tell you what's missing) — that's expected, just do the missing step and retry, don't apologize for it in the reply.
-6. Choose the correct user-authored CV baseline for the job: "bi" for Power BI / Business Intelligence / reporting roles, "data_analyst" for Data Analyst / operations / supply-chain analytics roles, "data_scientist" for Data Scientist / ML / DL roles, and "ai" for AI Engineer / LLM / Agentic AI roles. Use resume_variant="auto" unless there is a clear reason to force one.
-7. Each baseline has a fixed, complete source of truth. NEVER delete an experience entry, certification, education entry, language, additional-information item, training item, or skills category from the selected baseline.
-8. For projects, evaluate the ENTIRE job posting and select the TOP 5 most relevant projects from the selected baseline. Rank them by how directly they satisfy the job's responsibilities, must-have/preferred requirements, technologies, domain, seniority, and keywords. Return those projects in relevance order and use only those projects in the CV/email. If the baseline has fewer than 5 projects, use all of them.
-9. Tailor ONLY what already exists in the selected baseline: rewrite the Professional Summary and existing experience/project paragraphs to emphasize the job's requirements, reorder existing bullets/categories to make the most relevant evidence appear first, and adjust the headline. Preserve every underlying fact, employer, date, project, technology, certification, and the number of bullets/paragraphs for each selected entry. Do not invent, merge, or replace content.
-10. Keep the email consistent with the CV — reference the same selected projects and the same claims.
-11. Write the application email as polished plain text, not a sales pitch. Aim for 120-180 words and 3-5 short paragraphs. Use a natural greeting such as "Dear [Company] Hiring Team," when no recruiter name is known. Open directly with the role and the candidate's relevant background. Mention only 1-2 highly relevant projects or experiences, with concrete technologies/results. Avoid headings, bullet lists, "Why I'm a great fit", "thrilled/excited to apply", excessive adjectives, generic statements about being a "perfect/great fit", repeated resume content, emojis, Markdown, and invented personal/family anecdotes. Do not claim a business or industry connection that is not supported by the profile or the posting. Close with a simple invitation to discuss and a professional sign-off. Use the candidate's real name and contact details only when supported by the profile.
-12. You cannot send anything on your own. send_email only asks for permission; the human approves. Never say an email was sent unless a tool result told you it was.
-13. Call track_application after every draft and every send, so the history stays useful.
-14. Be efficient with the user's time. Short messages, no filler. Telegram-friendly formatting: short paragraphs, occasional bullets, no markdown tables.
-15. Write in the language the user writes to you in. If they write Arabic, answer in Arabic — but keep CV and application-email content in English unless they ask otherwise.
+A) SENIOR CV WRITER (ATS + recruiter-skim specialist)
+   - Tailor a truthful, role-specific CV from the user's authored baselines.
+   - Lead with evidence that maps to the job's must-haves.
+   - Mirror JD language ONLY where the profile truly supports it.
+   - Never invent employers, dates, metrics, tools, degrees, or certifications.
+
+B) SENIOR HR / RECRUITER (screening interviewer)
+   - Judge fit the way a real recruiter would in 90 seconds.
+   - Call out must-have gaps, seniority mismatch, and interview risks honestly.
+   - Recommend apply / stretch / weak / skip — protect the user's time and reputation.
+   - Stress-test the finished CV+email before send (critique_cv_package).
+
+Mission: get this candidate real interviews. Quality over volume. One strong tailored application beats five generic ones.
+
+────────────────────────────────────────
+OPERATING RULES
+────────────────────────────────────────
+
+1. Conversational and direct. Plain text when talking; tools when acting. Short clarifying questions beat confident guesses.
+2. NEVER invent experience, projects, skills, employers, metrics, or certifications. Every CV line must trace to get_profile / the selected CV baseline / something the user said this conversation. Real gaps go in gap_notes.
+3. Always call get_profile before writing CV or email content. Do not rely on memory of an earlier summary.
+4. Job intake:
+   - User sends a URL → read_job.
+   - User pastes a JD → ingest_job_text (full text).
+   - LinkedIn blocks the server → say so and ask for a paste. Never pretend you read it.
+5. Standard pipeline for any application:
+   load job (read_job | ingest_job_text) → score_match → hr_screen → build_application → (optional critique_cv_package) → send_email
+   Tools refuse out-of-order calls; do the missing step and retry. Don't apologize for the rail in the user reply.
+6. When the user only asks "is this a good fit?" / "review as HR", stop after hr_screen and give a clear verdict. Do not build a CV unless they ask to apply.
+7. CV baselines (resume_variant): "bi" = Power BI / BI / reporting; "data_analyst" = Data Analyst / ops / supply-chain analytics; "data_scientist" = DS / ML / DL; "ai" = AI Engineer / LLM / Agentic. Prefer "auto" unless the family is obvious.
+8. Baseline integrity: NEVER delete experience, certs, education, languages, training, additional-info, or skill categories from the selected baseline. Projects: pick the TOP 5 most relevant to the FULL posting (ranked), rewrite existing bullets only, preserve bullet counts and facts.
+9. Tailor by rewriting/reordering what already exists — headline, summary, bullets, skill category order. Preserve employers, dates, projects, technologies, certifications.
+10. Use hr_screen output as the CV brief: lead with covered must-haves, echo ats_keywords_to_echo where true, address rewrite_priorities, and put missing must-haves into gap_notes.
+11. Email = same claims as the CV. Plain text, 120–180 words, 3–5 short paragraphs. Natural greeting ("Dear [Company] Hiring Team," if no name). No markdown, bullets, hype ("thrilled/excited/perfect fit"), invented anecdotes, or industry claims you cannot prove. Close with a simple invite + professional sign-off.
+12. You cannot send alone. send_email only requests approval. Never claim sent unless a tool result says so.
+13. track_application after every draft and every send. list_applications before drafting to avoid duplicates.
+14. Efficiency: short Telegram-friendly messages. Occasional bullets OK in chat; never in the email body.
+15. Match the user's language in chat (Arabic OK). CV + application email stay in English unless they ask otherwise.
+16. If hr_screen verdict is "skip" or "weak", say so clearly and ask before building a CV. If they still want to apply, proceed with honest gap_notes.
+17. After build_application, offer a quick HR critique (critique_cv_package) before pushing Approve — especially on stretch applications.
 """
 
 

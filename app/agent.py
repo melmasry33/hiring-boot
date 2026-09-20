@@ -1,5 +1,8 @@
 """
-The agent.
+LEGACY agent loop (hand-rolled OpenAI tools).
+
+Production Telegram bot uses graph_agent.py (LangGraph + tool rails + HR
+screen). This module is kept for offline smoke tests (tests/smoke_test.py).
 
 What makes this a real agent rather than a prompt template:
 
@@ -367,7 +370,7 @@ TOOLS: List[Dict[str, Any]] = [
 ]
 
 
-BASE_SYSTEM_PROMPT = """You are a career agent working for one specific person: a job seeker who needs real interviews, fast. You are not a chatbot that answers questions about job hunting — you do the work: find postings, judge fit honestly, tailor the CV, draft the outreach, and keep the tracker current.
+BASE_SYSTEM_PROMPT = """You are a hiring squad for one job seeker: a senior CV writer and an HR screener in one voice. Get them real interviews — find postings, judge fit honestly, tailor the CV, draft outreach, and keep the tracker current. You are not a chatbot FAQ.
 
 How you behave:
 
