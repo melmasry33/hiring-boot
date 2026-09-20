@@ -263,7 +263,10 @@ def validate_pdf(pdf_path: str, cv_data: Dict[str, Any]) -> Dict[str, Any]:
     if not pdf_path or not Path(pdf_path).exists():
         return {"ok": False, "code": "PDF_CONTENT_MISMATCH", "error": "CV PDF path missing or file not found"}
     try:
-        text = extract_pdf_text(pdf_path)
+        from pypdf import PdfReader
+        reader = PdfReader(str(pdf_path))
+        pages = list(reader.pages)
+        text = "\n".join(page.extract_text() or "" for page in pages)
     except Exception as exc:
         return {"ok": False, "code": "PDF_CONTENT_MISMATCH", "error": f"Could not extract PDF text: {exc}"}
 
@@ -298,15 +301,33 @@ def validate_pdf(pdf_path: str, cv_data: Dict[str, Any]) -> Dict[str, Any]:
         present(str(edu)[:40], "education")
     for cert in cv_data.get("certifications") or []:
         present(str(cert)[:30], "certification")
+    for training in cv_data.get("training") or []:
+        present(str(training)[:30], "training")
     for lang in cv_data.get("languages") or []:
         present(str(lang).split("(")[0].strip(), "language")
+    for category, skills in (cv_data.get("skills_categories") or {}).items():
+        present(str(category), "skill category", min_len=6)
+        for skill in skills or []:
+            present(str(skill), "skill", min_len=6)
+    additional = str(cv_data.get("military_service") or "").strip()
+    if additional:
+        present(additional, "additional information")
 
-    if "PROFESSIONAL SUMMARY" not in text.upper() and cv_data.get("summary"):
-        issues.append("Missing Professional Summary section")
-    if cv_data.get("experience") and "EXPERIENCE" not in text.upper():
-        issues.append("Missing Experience section")
-    if cv_data.get("projects") and "PROJECTS" not in text.upper():
-        issues.append("Missing Projects section")
+    sections = (
+        ("Professional Summary", "PROFESSIONAL SUMMARY", bool(cv_data.get("summary"))),
+        ("Education", "EDUCATION", bool(cv_data.get("education"))),
+        ("Experience", "EXPERIENCE", bool(cv_data.get("experience"))),
+        ("Projects", "PROJECTS", bool(cv_data.get("projects"))),
+        ("Skills", "SKILLS", bool(cv_data.get("skills_categories"))),
+        ("Certifications", "CERTIFICATIONS", bool(cv_data.get("certifications"))),
+        ("Training & Simulations", "TRAINING & SIMULATIONS", bool(cv_data.get("training"))),
+        ("Languages", "LANGUAGES", bool(cv_data.get("languages"))),
+        ("Additional Information", "ADDITIONAL INFORMATION", bool(additional)),
+    )
+    upper_text = text.upper()
+    for label, header, required in sections:
+        if required and header not in upper_text:
+            issues.append(f"Missing {label} section")
 
     if issues:
         return {
@@ -316,4 +337,4 @@ def validate_pdf(pdf_path: str, cv_data: Dict[str, Any]) -> Dict[str, Any]:
             "issues": issues,
             "chars": len(text),
         }
-    return {"ok": True, "chars": len(text), "pages": text.count("\n") and None}
+    return {"ok": True, "chars": len(text), "pages": len(pages)}

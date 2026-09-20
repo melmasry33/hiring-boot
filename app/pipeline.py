@@ -15,7 +15,7 @@ from candidate import (
     select_variant,
 )
 from config import logger
-from matcher import analyze_job, build_tailoring_brief, format_hr_review_for_chat
+from matcher import analyze_job as analyze_candidate_match, analyze_seniority, build_tailoring_brief, extract_jd_skills, format_hr_review_for_chat
 from validator import (
     PipelineError,
     validate_email,
@@ -106,15 +106,35 @@ def ingest_job(
     return job
 
 
-def analyze_and_select_variant(job: Dict[str, Any], requested_variant: str = "auto") -> Dict[str, Any]:
+def analyze_job(job: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract job-only facts before candidate variant selection."""
     err = require_stage(job, Stage.JOB_INGESTED)
+    if err:
+        raise PipelineError("MISSING_REQUIRED_STAGE", err)
+    text = job.get("job_text") or ""
+    job["analysis"] = {
+        "job_skills": extract_jd_skills(text),
+        "seniority": analyze_seniority(text),
+        "role": (job.get("role_hint") or "").strip(),
+        "company": (job.get("company_hint") or "").strip(),
+    }
+    job["stage"] = Stage.JOB_ANALYZED.name
+    _log_stage(job)
+    return job
+
+
+def select_job_variant(job: Dict[str, Any], requested_variant: str = "auto") -> Dict[str, Any]:
+    """Select a canonical variant after job-only analysis, then add candidate match analysis."""
+    err = require_stage(job, Stage.JOB_ANALYZED)
     if err:
         raise PipelineError("MISSING_REQUIRED_STAGE", err)
     text = job.get("job_text") or ""
     role = job.get("role_hint") or ""
     key, reasons = select_variant(role, text, requested=requested_variant)
     variant = get_variant(key)
-    analysis = analyze_job(text, variant, role_hint=role, company_hint=job.get("company_hint") or "")
+    job_only_analysis = dict(job.get("analysis") or {})
+    analysis = analyze_candidate_match(text, variant, role_hint=role, company_hint=job.get("company_hint") or "")
+    analysis["job_analysis"] = job_only_analysis
     analysis["selected_variant"] = key
     analysis["variant_reasons"] = reasons
     job["selected_variant"] = key
@@ -125,6 +145,12 @@ def analyze_and_select_variant(job: Dict[str, Any], requested_variant: str = "au
     return job
 
 
+def analyze_and_select_variant(job: Dict[str, Any], requested_variant: str = "auto") -> Dict[str, Any]:
+    """Compatibility convenience wrapper preserving every explicit transition."""
+    analyze_job(job)
+    return select_job_variant(job, requested_variant)
+
+
 def run_hr_screen(job: Dict[str, Any]) -> Dict[str, Any]:
     err = require_stage(job, Stage.VARIANT_SELECTED)
     if err:
@@ -132,7 +158,7 @@ def run_hr_screen(job: Dict[str, Any]) -> Dict[str, Any]:
     variant = get_variant(job["selected_variant"])
     analysis = job.get("analysis") or {}
     if not analysis:
-        analysis = analyze_job(
+        analysis = analyze_candidate_match(
             job.get("job_text") or "",
             variant,
             role_hint=job.get("role_hint") or "",

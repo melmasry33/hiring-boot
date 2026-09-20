@@ -143,11 +143,24 @@ async def fetch_url(url: str, reason: str = "") -> Any:
 
 
 @tool
-def analyze_job(state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId], requested_variant: str = "auto") -> Command:
-    """Analyze the full JD and deterministically select its canonical CV variant."""
+def analyze_job(state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:
+    """Extract job-only requirements and seniority, ending at JOB_ANALYZED."""
     job = _job(state)
     try:
-        pipeline.analyze_and_select_variant(job, requested_variant)
+        pipeline.analyze_job(job)
+    except PipelineError as exc:
+        return _failure(tool_call_id, exc, job)
+    return _result(tool_call_id, {"ok": True, "stage": job["stage"], "analysis": job["analysis"]}, job)
+
+
+@tool
+def select_variant(
+    state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId], requested_variant: str = "auto",
+) -> Command:
+    """Deterministically select a canonical CV variant after JOB_ANALYZED."""
+    job = _job(state)
+    try:
+        pipeline.select_job_variant(job, requested_variant)
     except PipelineError as exc:
         return _failure(tool_call_id, exc, job)
     return _result(tool_call_id, {"ok": True, "stage": job["stage"], "selected_variant": job["selected_variant"], "analysis": job["analysis"], "variant_reasons": job["variant_reasons"]}, job)
@@ -155,8 +168,8 @@ def analyze_job(state: Annotated[AgentState, InjectedState], tool_call_id: Annot
 
 @tool
 def score_match(state: Annotated[AgentState, InjectedState], tool_call_id: Annotated[str, InjectedToolCallId]) -> Command:
-    """Compatibility name for analyze_job; production matching is matcher.py via pipeline."""
-    return analyze_job.func(state, tool_call_id, "auto")
+    """Compatibility name for select_variant; matching remains pipeline-backed."""
+    return select_variant.func(state, tool_call_id, "auto")
 
 
 @tool
@@ -271,8 +284,8 @@ def remember(note: str) -> dict:
     return {"ok": True, "saved": store.add_note(note)["text"]}
 
 
-TOOLS = [get_profile, get_candidate_payload, update_profile, search_jobs, read_job, ingest_job_text, fetch_url, analyze_job, score_match, hr_screen, select_evidence, generate_tailoring, build_pdf, generate_email, critique_cv_package, send_email, track_application, list_applications, remember]
-BASE_SYSTEM_PROMPT = """You are a truthful CV writer and HR screener for one candidate. Career facts exist only in the selected canonical CV variant; profile data is contact metadata. Required sequence: ingest/read job → analyze_job → hr_screen → get_candidate_payload → select_evidence → generate_tailoring → build_pdf → generate_email → send_email. Selections rank evidence only; every canonical experience and project stays in the PDF. Never invent facts. Email is plain text, 120–180 words. Nothing sends without human approval."""
+TOOLS = [get_profile, get_candidate_payload, update_profile, search_jobs, read_job, ingest_job_text, fetch_url, analyze_job, select_variant, score_match, hr_screen, select_evidence, generate_tailoring, build_pdf, generate_email, critique_cv_package, send_email, track_application, list_applications, remember]
+BASE_SYSTEM_PROMPT = """You are a truthful CV writer and HR screener for one candidate. Career facts exist only in the selected canonical CV variant; profile data is contact metadata. Required sequence: ingest/read job → analyze_job → select_variant → hr_screen → get_candidate_payload → select_evidence → generate_tailoring → build_pdf → generate_email → send_email. Selections rank evidence only; every canonical experience and project stays in the PDF. Never invent facts. Email is plain text, 120–180 words. Nothing sends without human approval."""
 
 
 def _system_prompt() -> str:

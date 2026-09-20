@@ -199,12 +199,12 @@ def generate_pdf_cv(cv_data: Dict[str, Any], filename: str = None) -> str:
     contacts = [item for item in (location, phone, email) if item]
     if contacts:
         set_font("", 8.0, muted)
-        pdf.cell(epw, 4.3, "  |  ".join(contacts), new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+        pdf.multi_cell(epw, 4.3, "  |  ".join(contacts), new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
 
     links = [item for item in (linkedin, github, datacamp) if item]
     if links:
         set_font("", 7.55, muted)
-        pdf.cell(epw, 4.1, "  |  ".join(links), new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
+        pdf.multi_cell(epw, 4.1, "  |  ".join(links), new_x=XPos.LMARGIN, new_y=YPos.NEXT, align="C")
 
     pdf.ln(1.7)
     draw_rule()
@@ -301,7 +301,8 @@ def generate_pdf_cv(cv_data: Dict[str, Any], filename: str = None) -> str:
     if military:
         section_header("Additional Information")
         set_font("", 8.5, body)
-        pdf.multi_cell(epw, 4.0, f"Military Service: {military}", new_x=XPos.LMARGIN, new_y=YPos.NEXT)
+        additional_text = military if military.lower().startswith("military service:") else f"Military Service: {military}"
+        pdf.multi_cell(epw, 4.0, additional_text, new_x=XPos.LMARGIN, new_y=YPos.NEXT)
 
     pdf.output(str(output_path))
     logger.info("Generated complete Unicode-safe CV PDF at: %s", output_path)
